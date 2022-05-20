@@ -16,9 +16,9 @@ import PIL.Image as Image
 import random
 
 #IMPORTANT GENERAL STUFF
-EPOCHS = 100
+EPOCHS = 50
 BATCH_SIZE = 64
-LR = 0.001
+LR = 0.0005
 WD = 1e-7
 USE_GPU = True
 
@@ -142,7 +142,7 @@ print("Total number of parameters is: {}".format(params))
 train_model(model, optimizer, epochs = EPOCHS)
 
 # save the model
-torch.save(model.state_dict(), 'model.pt')
+torch.save(model.state_dict(), 'models/model.pt')
 
 
 

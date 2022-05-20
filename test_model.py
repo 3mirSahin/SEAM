@@ -94,7 +94,7 @@ class ResNet(nn.Module):
         return x
 
 model = ResNet()
-model.load_state_dict(torch.load("model.pt"))
+model.load_state_dict(torch.load("models/model.pt"))
 model.eval()
 
 cube_min_max = table.get_bounding_box()
@@ -103,7 +103,27 @@ cube_min_max = [cube_min_max[0] + cube_size,
                         cube_min_max[2] + cube_size,
                         cube_min_max[3] - cube_size,
                         cube_min_max[5] - .05]
-cube.set_position([0,0,cube_min_max[3]],table)
+
+position_min, position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]], [cube_min_max[1],
+                                                                                           cube_min_max[3],
+                                                                                           cube_min_max[3]]
+
+
+def replaceCube():
+    pos = list(np.random.uniform(position_min, position_max))
+    cube.set_position(pos, table)
+    try:
+        pp = agent.get_linear_path(
+            position=cube.get_position(),
+            euler=[0, math.radians(180), 0],
+            steps=100
+        )
+    except ConfigurationPathError as e:
+        print("Cube bad placement. Replacing.")
+        replaceCube()
+
+
+replaceCube()
 
 count = 0
 done = False
