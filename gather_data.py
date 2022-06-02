@@ -15,6 +15,7 @@ import os
 import PIL
 from PIL import Image
 from pyrep.objects.joint import JointMode
+from pyrep.objects.proximity_sensor import ProximitySensor
 
 
 
@@ -42,7 +43,8 @@ class Environment(object):
         self.initial_joint_positions = self.agent.get_joint_positions()
         self.agent_state = self.agent.get_configuration_tree()
 
-
+        #proximity sensor
+        self.ps = ProximitySensor("Proximity_sensor")
         #--Vision Sensor
         self.vs = VisionSensor("Vision_sensor")
         self.vs.set_resolution([64, 64])
@@ -66,9 +68,9 @@ class Environment(object):
         self.position_min, self.position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]], [cube_min_max[1],
                                                                                            cube_min_max[3],
                                                                                            cube_min_max[3]]
-        self.target_min, self.target_max = [-.03, -.03, 0], [.03, .03, .03]
+        self.target_min, self.target_max = [-.02, -.02, 0], [.02, .02, .02]
 
-        col_name = ["imLoc", "jVel", "jPos", "eeVel", "eePos", "cPos"]
+        col_name = ["imLoc", "jVel", "jPos", "eeVel", "eePos", "cPos","stop"]
         self.df = pd.DataFrame(columns=col_name)
         self.path=None
         self.path_step = None
@@ -128,7 +130,7 @@ class Environment(object):
         except ConfigurationPathError as e:
             print("Cube bad placement. Replacing.")
             self.replaceTarget()
-    def gatherInfo(self,ep,r,s):
+    def gatherInfo(self,ep,r,s,stop=False,):
         im = self.vs.capture_rgb()
         if not os.path.isdir(f"images/episode{ep}"):
             os.mkdir(f"images/episode{ep}")
@@ -143,8 +145,14 @@ class Environment(object):
         ee_pos = ",".join(self.agent.get_tip().get_position(relative_to=self.agent).astype(str))
         ee_vel = ",".join(np.concatenate(list(self.agent.get_tip().get_velocity()), axis=0).astype(str))
         cube_pos = ",".join(self.cube.get_position(relative_to=self.agent).astype(str))
-
-        line = [location, joint_vel, joint_pos, ee_vel, ee_pos, cube_pos]
+        #this is to try and teach the last frame to the neural network.
+        stp = 0
+        if stop:
+            stp = 1
+        # if stop:
+        #     joint_vel = ",".join(np.zeros_like(np.array(self.agent.get_joint_velocities())).astype(str))
+        #     ee_vel = ",".join(np.zeros_like(np.concatenate(list(self.agent.get_tip().get_velocity()), axis=0)).astype(str))
+        line = [location, joint_vel, joint_pos, ee_vel, ee_pos, cube_pos,stp]
         df_length = len(self.df)
         self.df.loc[df_length] = line
     def get_path(self):
@@ -152,10 +160,19 @@ class Environment(object):
             position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)], steps=100)
         self.path_step = self.path._path_points
         # print(self.path_step)
-    def step(self):
-        done = self.path.step()
-        self.pr.step()
+
+    def checkStop(self):
+        dist = self.ps.read()
+        done = False
+        if dist <= .12 and dist > 0:
+            done = True
         return done
+    def step(self,pathstep = True):
+        if pathstep:
+            done = self.path.step()
+        self.pr.step()
+        if pathstep:
+            return done
 
     def shutdown(self):
         self.pr.stop()
@@ -179,8 +196,21 @@ for e in range(EPISODE):
         sq=0
         while not done:
             done = env.step()
-            env.gatherInfo(e,r,sq)
+            if not done:
+                env.gatherInfo(e,r,sq)
+            else:
+                env.gatherInfo(e,r,sq,stop=True)
             sq+=1
+        # if done:
+        #
+        #     for i in range(10):
+        #         print(f"It's now supposed to stop. {r},{e}")
+        #         env.step(False)
+        #         env.gatherInfo(e,r,sq,stop=True)
+        #         sq+=1
+env.shutdown()
+
+
 
 env.df.to_csv("lol.csv")
 

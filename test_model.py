@@ -12,6 +12,7 @@ from pyrep.const import PrimitiveShape
 from pyrep.errors import ConfigurationPathError
 from pyrep.objects.dummy import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
+from pyrep.objects.camera import Camera
 from pyrep.objects.proximity_sensor import ProximitySensor
 
 import numpy as np
@@ -31,6 +32,9 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import sampler
 from torchvision import datasets, transforms
 
+from SimpleCNNModel import SCNN
+STOP = False
+EEVEL = True
 #back to work
 SCENE_FILE = join(dirname(abspath(__file__)), 'simulations/scene_panda_reach_target.ttt')
 pr = PyRep()
@@ -65,36 +69,12 @@ transform = transforms.Compose(
         ]
     )
 
-class ResNet(nn.Module):
-    def __init__(self,num_outputs = 13,fconv=[3,1,1]):
-        super(ResNet,self).__init__()
-
-        self.conv1 = nn.Sequential(Conv2d(3,64,kernel_size= fconv[0],stride=fconv[1],padding=fconv[2],bias=False),
-                                   nn.BatchNorm2d(64),
-                                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                                   nn.ReLU(inplace=True))
-        self.conv2 = nn.Sequential(Conv2d(64,128,kernel_size=fconv[0],stride=fconv[1],padding=fconv[2],bias=False),
-                                   nn.BatchNorm2d(128),
-                                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                                   nn.ReLU(inplace=True))
-        self.conv3 = nn.Sequential(Conv2d(128, 256, kernel_size=fconv[0], stride=fconv[1], padding=fconv[2], bias=False),
-                                   nn.BatchNorm2d(256),
-                                   nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                                   nn.ReLU(inplace=True))
-        self.fc = nn.Linear(256*8*8,num_outputs)
-
-    def forward(self,x):
-
-        x = self.conv1(x)
-        x=self.conv2(x)
-        x=self.conv3(x)
-        x = x.view(x.size(0),-1)
-        x = self.fc(x)
-
-        return x
-
-model = ResNet()
-model.load_state_dict(torch.load("models/model.pt"))
+if EEVEL:
+    numparam = 12
+else:
+    numparam = 13
+model = SCNN(stop=STOP,num_outputs=numparam)
+model.load_state_dict(torch.load("models/eeModel.pt"))
 model.eval()
 
 cube_min_max = table.get_bounding_box()
@@ -128,6 +108,10 @@ replaceCube()
 count = 0
 done = False
 pr.step()
+
+stops = []
+
+
 while not done:
     #take the image from the robot
     img = vs.capture_rgb()
@@ -139,18 +123,30 @@ while not done:
     res = res.tolist()
     # print(res)
     #only take the joint velocities
-    jointVel = res[0][:7]
-    print(jointVel)
+    if EEVEL:
+        eeVel = res[0][:6]
+        jacob = agent.get_jacobian()
+
+        jointVel = eeVel@np.transpose(jacob)
+        #use the jacobian to calculate jointvel
+    else:
+        jointVel = res[0][:7]
+    # print(jointVel)
+    if res[0][-1] >= .5 and STOP:
+        done = True
 
     agent.set_joint_target_velocities(jointVel)
     pr.step()
     count+=1
     dist = ps.read()
-    print(dist)
+    # print(dist)
+    stops.append(res[0][-1])
     if dist<=.11 and dist > 0:
         done = True
+    if count >= 500:
+        done = True
 
-
+print(max(stops))
 
 
 pr.stop()
