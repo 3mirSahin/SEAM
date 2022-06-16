@@ -19,17 +19,16 @@ class SCNN(nn.Module):
         self.conv1 = nn.Sequential(Conv2d(3,64,kernel_size= fconv[0],stride=fconv[1],padding=fconv[2],bias=False),
                                    nn.BatchNorm2d(64),
                                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                                   nn.LeakyReLU(inplace=True))
+                                   nn.ReLU(inplace=True))
         self.conv2 = nn.Sequential(Conv2d(64,128,kernel_size=fconv[0],stride=fconv[1],padding=fconv[2],bias=False),
                                    nn.BatchNorm2d(128),
                                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                                   nn.LeakyReLU(inplace=True))
+                                   nn.ReLU(inplace=True))
         self.conv3 = nn.Sequential(Conv2d(128, 256, kernel_size=fconv[0], stride=fconv[1], padding=fconv[2], bias=False),
                                    nn.BatchNorm2d(256),
                                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-                                   nn.LeakyReLU(inplace=True))
+                                   nn.ReLU(inplace=True))
         self.fc = nn.Linear(256*8*8,self.num_outputs)
-        self.fcs = nn.Linear(256*8*8,1)
 
     def forward(self,x):
 

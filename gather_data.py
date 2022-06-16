@@ -21,7 +21,7 @@ from pyrep.objects.proximity_sensor import ProximitySensor
 
 #Setup
 SCENE_FILE = join(dirname(abspath(__file__)), "simulations/scene_panda_reach_target.ttt")
-EPISODE = 25 #number of total episodes to run
+EPISODE = 100 #number of total episodes to run
 RUNS = 4 #number of total different approaches to take
 EPISODE_LENGTH = 100 #number of total steps to reach the target
 
@@ -70,7 +70,7 @@ class Environment(object):
                                                                                            cube_min_max[3]]
         self.target_min, self.target_max = [-.02, -.02, 0], [.02, .02, .02]
 
-        col_name = ["imLoc", "jVel", "jPos", "eeVel", "eePos", "cPos","stop"]
+        col_name = ["imLoc", "jVel", "jPos", "eeVel","eeJacVel", "eePos", "cPos","stop"]
         self.df = pd.DataFrame(columns=col_name)
         self.path=None
         self.path_step = None
@@ -130,7 +130,7 @@ class Environment(object):
         except ConfigurationPathError as e:
             print("Cube bad placement. Replacing.")
             self.replaceTarget()
-    def gatherInfo(self,ep,r,s,stop=False,):
+    def gatherInfo(self,ep,r,s,stop=False):
         im = self.vs.capture_rgb()
         if not os.path.isdir(f"images/episode{ep}"):
             os.mkdir(f"images/episode{ep}")
@@ -139,10 +139,16 @@ class Environment(object):
         location = f"images/episode{ep}/run{r}/s{s}.jpg"
         im = Image.fromarray((im * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
         im.save(location)
-
+        jacob = self.agent.get_jacobian()
+        jacob = np.flip(jacob,axis=0)
+        jacob = jacob.T
+        # print(jacob)
+        # jacob = np.flip(jacob,axis=0)
         joint_vel = ",".join(np.array(self.agent.get_joint_velocities()).astype(str))
         joint_pos = ",".join(np.array(self.agent.get_joint_positions()).astype(str))
+        jVel = [float(item) for item in joint_vel.split(",")]
         ee_pos = ",".join(self.agent.get_tip().get_position(relative_to=self.agent).astype(str))
+        ee_j_vel = ",".join(np.array(jacob@jVel).astype(str))
         ee_vel = ",".join(np.concatenate(list(self.agent.get_tip().get_velocity()), axis=0).astype(str))
         cube_pos = ",".join(self.cube.get_position(relative_to=self.agent).astype(str))
         #this is to try and teach the last frame to the neural network.
@@ -152,7 +158,7 @@ class Environment(object):
         # if stop:
         #     joint_vel = ",".join(np.zeros_like(np.array(self.agent.get_joint_velocities())).astype(str))
         #     ee_vel = ",".join(np.zeros_like(np.concatenate(list(self.agent.get_tip().get_velocity()), axis=0)).astype(str))
-        line = [location, joint_vel, joint_pos, ee_vel, ee_pos, cube_pos,stp]
+        line = [location, joint_vel, joint_pos, ee_vel,ee_j_vel, ee_pos, cube_pos,stp]
         df_length = len(self.df)
         self.df.loc[df_length] = line
     def get_path(self):
