@@ -1,9 +1,3 @@
-"""
-A Franka Panda reaches for 10 randomly places targets.
-This script contains examples of:
-    - Linear (IK) paths.
-    - Scene manipulation (creating an object and moving it).
-"""
 from os.path import dirname, join, abspath
 from pyrep import PyRep
 from pyrep.robots.arms.panda import Panda
@@ -33,20 +27,26 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import sampler
 from torchvision import datasets, transforms
 
-from SimpleCNNModel import SCNN
-from CNNLSTMModel import CNNLSTM
+from deep_models import SCNN, CNNLSTM
 
+'''Configurations for the test instance.'''
+RUNS = 10 #the total number of test attempts done. Changes the cube location.
 STOP = False
 EEVEL = True
-#back to work
 SCENE_FILE = join(dirname(abspath(__file__)), 'simulations/scene_panda_reach_target.ttt')
+
+
+'''PyRep Setup'''
 pr = PyRep()
+
 pr.launch(SCENE_FILE, headless=False)
 pr.start()
 agent = Panda()
 agent_ee_tip = agent.get_tip()
 agent.reset_dynamic_object()
 agent.set_control_loop_enabled(False)
+agent_state = agent.get_joint_configuration_tree()
+initial_joint_position = agent.get_joint_positions()
 # agent.set_joint_target_positions([Torque,True,True,True,True,True,True])
 vs = VisionSensor("Vision_sensor")
 vs.set_resolution([64,64])
@@ -60,6 +60,7 @@ target = Dummy.create()
 cube_size = .1
 table= Shape('diningTable_visible')
 
+'''Model Hyperparameters'''
 device = torch.device('cpu')
 
 mean = torch.Tensor([0.485, 0.456, 0.406])
@@ -72,6 +73,7 @@ transform = transforms.Compose(
         ]
     )
 
+'''Model Choice'''
 if EEVEL:
     numparam = 12
 else:
@@ -81,6 +83,8 @@ model.load_state_dict(torch.load("models/ee400LSTMModel.pt"))
 model.eval()
 model.start_newSeq()
 
+
+'''Cube Movement'''
 cube_min_max = table.get_bounding_box()
 cube_min_max = [cube_min_max[0] + cube_size,
                         .6 - cube_size,
@@ -91,7 +95,13 @@ cube_min_max = [cube_min_max[0] + cube_size,
 position_min, position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]], [cube_min_max[1],
                                                                                            cube_min_max[3],
                                                                                            cube_min_max[3]]
+def resetEnv():
+    agent.set_joint_target_velocities(np.zeros_like(agent.get_joint_target_velocities()))
 
+    agent.reset_dynamic_object()
+    pr.set_configuration_tree(agent_state)
+
+    agent.set_joint_positions(initial_joint_positions,disable_dynamics=True)
 
 def replaceCube():
     pos = list(np.random.uniform(position_min, position_max))
@@ -107,15 +117,7 @@ def replaceCube():
         replaceCube()
 
 
-replaceCube()
 
-count = 0
-done = False
-pr.step()
-
-stops = []
-
-read = pd.read_csv("lol.csv")
 
 
 def get_trueJacobian(robot):
@@ -137,61 +139,93 @@ def get_jointVelo(robot, v: np.ndarray) -> np.ndarray:
     q = np.matmul(np.linalg.pinv(J.T), v)
     return q
 
-while not done:
-    #take the image from the robot
-    img = vs.capture_rgb()
-    img = Image.fromarray((img * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
-    img = transform(img)
-    img = img.unsqueeze(0)
-    #shove it into the model
-    res = model(img)
-    res = res.tolist()
-
-
-    # print(res)
-    #only take the joint velocities
-    if EEVEL:
-
-        # jVel = [float(item) for item in read['jVel'][count].split(",")]
-        # eeVel = [float(item) for item in read['eeJacVel'][count].split(",")]
-        eeVel = res[0][:6]
+def checkEEBoundary(ee, target):
+    #get the position of both the end effector and the cube
+    eePos = ee.get_position()
+    cubePos = target.get_position()
+    #check the boundaries of the cube.
+    if eePos[0] > cubePos[0]-cube_size and eePos[0] < cubePos[0]+cube_size:
+        if eePos[1] > cubePos[1]-cube_size and eePos[1] < cubePos[1]+cube_size:
+            if eePos[2] > cubePos[2]-cube_size and eePos[2] < cubePos[2]+cube_size:
+                return True
+    return False
 
 
 
-        # jacob = get_trueJacobian(agent).T
-        # jacob = agent.get_jacobian().T
+correct = 0
+for _ in range(RUNS):
+    resetEnv()
+    replaceCube()
 
-        # eVel = jacob@jVel
-        # print(eeVel)
-        # print(eVel)
-        # print("-----")
-
-        #let's feed in the training data
-
-        jointVel = get_jointVelo(agent,eeVel)
-        # jointVel = np.flip(jointVel,axis=0)
-        # jointVel = jVel
-
-        # jointVel = np.flip(jointVel,axis=0)
-        # use the jacobian to calculate jointvel
-    else:
-        jointVel = res[0][:7]
-    # print(jointVel)
-    if res[0][-1] >= .5 and STOP:
-        done = True
-
-    agent.set_joint_target_velocities(jointVel)
+    count = 0
+    done = False
     pr.step()
-    count+=1
-    dist = ps.read()
-    # print(dist)
-    stops.append(res[0][-1])
-    if dist<=.11 and dist > 0:
-        done = True
-    if count >= 100:
-        done = True
 
-print(max(stops))
+    stops = []
+
+    read = pd.read_csv("lol.csv")
+
+    while not done:
+        #take the image from the robot
+        img = vs.capture_rgb()
+        img = Image.fromarray((img * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
+        img = transform(img)
+        img = img.unsqueeze(0)
+        #shove it into the model
+        res = model(img)
+        res = res.tolist()
+
+
+        # print(res)
+        #only take the joint velocities
+        if EEVEL:
+
+            # jVel = [float(item) for item in read['jVel'][count].split(",")]
+            # eeVel = [float(item) for item in read['eeJacVel'][count].split(",")]
+            eeVel = res[0][:6]
+
+
+
+            # jacob = get_trueJacobian(agent).T
+            # jacob = agent.get_jacobian().T
+
+            # eVel = jacob@jVel
+            # print(eeVel)
+            # print(eVel)
+            # print("-----")
+
+            #let's feed in the training data
+
+            jointVel = get_jointVelo(agent,eeVel)
+            # jointVel = np.flip(jointVel,axis=0)
+            # jointVel = jVel
+
+            # jointVel = np.flip(jointVel,axis=0)
+            # use the jacobian to calculate jointvel
+        else:
+            jointVel = res[0][:7]
+        # print(jointVel)
+        if res[0][-1] >= .5 and STOP:
+            done = True
+
+        agent.set_joint_target_velocities(jointVel)
+        pr.step()
+        count+=1
+        dist = ps.read()
+        # print(dist)
+        stops.append(res[0][-1])
+        if dist<=.11 and dist > 0:
+            done = True
+        if count >= 100:
+            done = True
+        #need to add a check here to confirm or fail whether the arm reached the target or not.
+        #We can check if the tip is within the the cube.
+        if checkEEBoundary(agent_ee_tip,cube):
+            correct+=1
+
+
+print("Total Correct: ", correct)
+print("Percentage: ", correct/RUNS*100)
 
 
 pr.stop()
