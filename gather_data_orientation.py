@@ -116,7 +116,7 @@ class Environment(object):
         rot = list(np.random.uniform(self.orient_min,self.orient_max))
         rotation = list()
         self.cube.set_position(pos, self.table)
-        self.cube.set_rotation(rot,-1) #is table really the correct thing to base the orientation off of?
+        self.cube.set_orientation(rot) #is table really the correct thing to base the orientation off of?
         try:
             pp = self.agent.get_linear_path(
                 position=self.cube.get_position(),
@@ -131,7 +131,7 @@ class Environment(object):
         targpos = list(np.random.uniform(self.target_min, self.target_max))
 
         self.target.set_position(targpos, self.cube)
-        self.target.set_rotation([0,0,0],self.cube) #giving the same orientation to the target as well.
+        self.target.set_orientation([0,0,0],self.cube) #giving the same orientation to the target as well.
         try:
             self.path = self.agent.get_linear_path(
                 position=self.target.get_position(),
@@ -173,8 +173,9 @@ class Environment(object):
         df_length = len(self.df)
         self.df.loc[df_length] = line
     def get_path(self):
+        ori = self.cube.get_orientation()
         self.path = self.agent.get_linear_path(
-            position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)], steps=100)
+            position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)-ori[2]], steps=100)
         self.path_step = self.path._path_points
         # print(self.path_step)
 
@@ -208,15 +209,15 @@ for e in range(EPISODE):
     for r in range(RUNS):
         env.setup()
         env.replaceTarget()
-        # env.get_path()
+        env.get_path()
         done=False
         sq=0
         while not done:
             done = env.step()
-            if not done:
-                env.gatherInfo(e,r,sq)
-            else:
-                env.gatherInfo(e,r,sq,stop=True)
+            # if not done:
+            #     env.gatherInfo(e,r,sq)
+            # else:
+            #     env.gatherInfo(e,r,sq,stop=True)
             sq+=1
         # if done:
         #
@@ -229,7 +230,7 @@ env.shutdown()
 
 
 
-env.df.to_csv("lol.csv")
+# env.df.to_csv("lol.csv")
 
 
 

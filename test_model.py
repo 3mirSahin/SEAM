@@ -31,34 +31,9 @@ from deep_models import SCNN, CNNLSTM
 
 '''Configurations for the test instance.'''
 RUNS = 10 #the total number of test attempts done. Changes the cube location.
-STOP = False
+STOP = True
 EEVEL = True
 SCENE_FILE = join(dirname(abspath(__file__)), 'simulations/scene_panda_reach_target.ttt')
-
-
-'''PyRep Setup'''
-pr = PyRep()
-
-pr.launch(SCENE_FILE, headless=False)
-pr.start()
-agent = Panda()
-agent_ee_tip = agent.get_tip()
-agent.reset_dynamic_object()
-agent.set_control_loop_enabled(False)
-agent_state = agent.get_joint_configuration_tree()
-initial_joint_position = agent.get_joint_positions()
-# agent.set_joint_target_positions([Torque,True,True,True,True,True,True])
-vs = VisionSensor("Vision_sensor")
-vs.set_resolution([64,64])
-ps = ProximitySensor("Proximity_sensor")
-
-cube= Shape.create(type=PrimitiveShape.CUBOID,
-                      size=[0.05, 0.05, 0.05],
-                      color=[1.0, 0.1, 0.1],
-                      static=True, respondable=False)
-target = Dummy.create()
-cube_size = .1
-table= Shape('diningTable_visible')
 
 '''Model Hyperparameters'''
 device = torch.device('cpu')
@@ -79,9 +54,35 @@ if EEVEL:
 else:
     numparam = 13
 model = CNNLSTM(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/ee400LSTMModel.pt"))
+model.load_state_dict(torch.load("models/ee400StopLSTMModel.pt"))
 model.eval()
 model.start_newSeq()
+
+'''PyRep Setup'''
+pr = PyRep()
+
+pr.launch(SCENE_FILE, headless=False)
+pr.start()
+agent = Panda()
+agent_ee_tip = agent.get_tip()
+agent.reset_dynamic_object()
+agent.set_control_loop_enabled(False)
+agent_state = agent.get_configuration_tree()
+initial_joint_position = agent.get_joint_positions()
+# agent.set_joint_target_positions([Torque,True,True,True,True,True,True])
+vs = VisionSensor("Vision_sensor")
+vs.set_resolution([64,64])
+ps = ProximitySensor("Proximity_sensor")
+
+cube= Shape.create(type=PrimitiveShape.CUBOID,
+                      size=[0.05, 0.05, 0.05],
+                      color=[1.0, 0.1, 0.1],
+                      static=True, respondable=False)
+target = Dummy.create()
+cube_size = .1
+table= Shape('diningTable_visible')
+
+
 
 
 '''Cube Movement'''
@@ -97,11 +98,12 @@ position_min, position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]]
                                                                                            cube_min_max[3]]
 def resetEnv():
     agent.set_joint_target_velocities(np.zeros_like(agent.get_joint_target_velocities()))
+    agent.set_motor_locked_at_zero_velocity(True)
 
     agent.reset_dynamic_object()
     pr.set_configuration_tree(agent_state)
 
-    agent.set_joint_positions(initial_joint_positions,disable_dynamics=True)
+    agent.set_joint_positions(initial_joint_position,disable_dynamics=True)
 
 def replaceCube():
     pos = list(np.random.uniform(position_min, position_max))
@@ -205,22 +207,26 @@ for _ in range(RUNS):
         else:
             jointVel = res[0][:7]
         # print(jointVel)
-        if res[0][-1] >= .5 and STOP:
-            done = True
+
 
         agent.set_joint_target_velocities(jointVel)
+        if res[0][-1] >= .5 and STOP:
+            # done = True
+
+            agent.set_joint_target_velocities([0,0,0,0,0,0,0])
+
         pr.step()
         count+=1
         dist = ps.read()
         # print(dist)
         stops.append(res[0][-1])
         if dist<=.11 and dist > 0:
-            done = True
-        if count >= 100:
+            print(res[0][-1])
+        if count >= 150:
             done = True
         #need to add a check here to confirm or fail whether the arm reached the target or not.
         #We can check if the tip is within the the cube.
-        if checkEEBoundary(agent_ee_tip,cube):
+        if checkEEBoundary(agent_ee_tip,cube) and done:
             correct+=1
 
 

@@ -169,8 +169,10 @@ class Environment(object):
 
     def checkStop(self):
         dist = self.ps.read()
+        # print(dist)
         done = False
-        if dist <= .12 and dist > 0:
+        if dist <= .15 and dist > 0:
+            print("reached")
             done = True
         return done
     def step(self,pathstep = True):
@@ -202,10 +204,8 @@ for e in range(EPISODE):
         sq=0
         while not done:
             done = env.step()
-            if not done:
-                env.gatherInfo(e,r,sq)
-            else:
-                env.gatherInfo(e,r,sq,stop=True)
+            stp = env.checkStop()
+            env.gatherInfo(e,r,sq,stop=stp)
             sq+=1
         # if done:
         #

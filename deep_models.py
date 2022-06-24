@@ -47,8 +47,11 @@ class SCNN(nn.Module):
 class CNNLSTM(nn.Module):
     def __init__(self,num_outputs = 13,fconv=[3,1,1],stop = False):
         super(CNNLSTM,self).__init__()
-        self.num_outputs = num_outputs
-
+        self.stop = stop
+        if self.stop:
+            self.num_outputs = num_outputs+1
+        else:
+            self.num_outputs = num_outputs
         self.conv1 = self.conv_layer(3, 64)
         self.conv2 = self.conv_layer(64, 128)
         self.conv3 = self.conv_layer(128, 256)
@@ -67,16 +70,16 @@ class CNNLSTM(nn.Module):
 
         self.h, self.c = None,None
     def conv_layer(
-            self,
-            chIN,
-            chOUT,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
-            pool_kernel=3,
-            pool_stride=2,
-            pool_padding=1
+        self,
+        chIN,
+        chOUT,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        bias=False,
+        pool_kernel=3,
+        pool_stride=2,
+        pool_padding=1
     ):
         conv = nn.Sequential(nn.Conv2d(chIN, chOUT, kernel_size, stride, padding, bias=bias),
                              nn.BatchNorm2d(chOUT),
@@ -100,5 +103,8 @@ class CNNLSTM(nn.Module):
             x = self.fc(x)
             x, (self.h, self.c) = self.rnn(x, (self.h,self.c))
 
-        return self.out(x)
+        fin = self.out(x)
+        if self.stop:
+            fin[:,-1] = torch.sigmoid(fin[:,-1])
 
+        return fin

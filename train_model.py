@@ -14,18 +14,17 @@ import matplotlib.pyplot as plt
 import PIL
 import PIL.Image as Image
 import random
-from SimpleCNNModel import SCNN
-from CNNLSTMModel import CNNLSTM
+from deep_models import CNNLSTM, SCNN
 
 #IMPORTANT GENERAL STUFF
-EPOCHS = 15
+EPOCHS = 10
 BATCH_SIZE = 64
 LR = 0.0005
 WD = 1e-7
 TIMESTEP = 4
 USE_GPU = True
 EEVEL = True
-STOP = False
+STOP = True
 # MODEL = "CNNLSTM"
 
 
@@ -104,7 +103,7 @@ dtype = torch.float32
 def lossWStop(out,true):
     mL = F.mse_loss(out[:,:-1],true[:,:-1])
     bL = F.binary_cross_entropy(out[:,-1],true[:,-1])
-    return mL+.01*bL
+    return mL+.4*bL
 
 
 def train_model(model,optimizer,epochs=1):
@@ -151,7 +150,7 @@ print("Total number of parameters is: {}".format(params))
 train_model(model, optimizer, epochs = EPOCHS)
 
 # save the model
-torch.save(model.state_dict(), 'models/ee400LSTMModel.pt')
+torch.save(model.state_dict(), 'models/ee400StopLSTMModel.pt')
 
 
 
