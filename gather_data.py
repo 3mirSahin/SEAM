@@ -21,7 +21,7 @@ from pyrep.objects.proximity_sensor import ProximitySensor
 
 #Setup
 SCENE_FILE = join(dirname(abspath(__file__)), "simulations/scene_panda_reach_target.ttt")
-EPISODE = 100 #number of total episodes to run
+EPISODE = 150 #number of total episodes to run
 RUNS = 4 #number of total different approaches to take
 EPISODE_LENGTH = 100 #number of total steps to reach the target
 
@@ -65,11 +65,11 @@ class Environment(object):
                         cube_min_max[2] + cube_size,
                         cube_min_max[3] - cube_size,
                         cube_min_max[5] - .05]
-        self.position_min, self.position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]], [cube_min_max[1],
+        self.position_min, self.position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]-.05], [cube_min_max[1],
                                                                                            cube_min_max[3],
-                                                                                           cube_min_max[3]]
+                                                                                           cube_min_max[3]-.05]
         self.target_min, self.target_max = [-.02, -.02, 0], [.02, .02, .02]
-
+        self.orient_min, self.orient_max = [0, 0, 0], [0, 0, 0]#[0, 0, math.radians(-45)], [0, 0, math.radians(45)]
         col_name = ["imLoc", "jVel", "jPos", "eeVel","eeJacVel", "eePos", "cPos","stop"]
         self.df = pd.DataFrame(columns=col_name)
         self.path=None
@@ -107,11 +107,13 @@ class Environment(object):
 
     def replaceCube(self):
         pos = list(np.random.uniform(self.position_min, self.position_max))
+        rot = list(np.random.uniform(self.orient_min, self.orient_max))
         self.cube.set_position(pos, self.table)
+        self.cube.set_orientation(rot)  # is table really the correct thing to base the orientation off of?
         try:
             pp = self.agent.get_linear_path(
                 position=self.cube.get_position(),
-                euler=[0, math.radians(180), 0],
+                euler=[0, math.radians(180), self.cube.get_orientation()[2]],
                 steps=100
             )
         except ConfigurationPathError as e:
@@ -121,10 +123,11 @@ class Environment(object):
     def replaceTarget(self):
         targpos = list(np.random.uniform(self.target_min, self.target_max))
         self.target.set_position(targpos, self.cube)
+        self.target.set_orientation([0, 0, 0], self.cube)  # giving the same orientation to the target as well.
         try:
             self.path = self.agent.get_linear_path(
                 position=self.target.get_position(),
-                euler=[0, math.radians(180), math.radians(90)],
+                euler=[0, math.radians(180), math.radians(90)-self.cube.get_orientation()[2]],
                 steps=100
             )
         except ConfigurationPathError as e:
@@ -162,17 +165,18 @@ class Environment(object):
         df_length = len(self.df)
         self.df.loc[df_length] = line
     def get_path(self):
+        ori = self.cube.get_orientation()
         self.path = self.agent.get_linear_path(
-            position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)], steps=100)
+            position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)-ori[2]], steps=100)
         self.path_step = self.path._path_points
         # print(self.path_step)
 
-    def checkStop(self):
+    def checkStop(self): #currently stops a bit too early. Adjust accordingly.
         dist = self.ps.read()
         # print(dist)
         done = False
-        if dist <= .15 and dist > 0:
-            print("reached")
+        if dist <= .11 and dist > 0:
+            print("reached", dist)
             done = True
         return done
     def step(self,pathstep = True):
@@ -199,7 +203,7 @@ for e in range(EPISODE):
     for r in range(RUNS):
         env.setup()
         env.replaceTarget()
-        # env.get_path()
+        env.get_path()
         done=False
         sq=0
         while not done:

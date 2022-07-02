@@ -17,9 +17,9 @@ import random
 from deep_models import CNNLSTM, SCNN
 
 #IMPORTANT GENERAL STUFF
-EPOCHS = 10
+EPOCHS = 15
 BATCH_SIZE = 64
-LR = 0.0005
+LR = 0.0004
 WD = 1e-7
 TIMESTEP = 4
 USE_GPU = True
@@ -103,7 +103,7 @@ dtype = torch.float32
 def lossWStop(out,true):
     mL = F.mse_loss(out[:,:-1],true[:,:-1])
     bL = F.binary_cross_entropy(out[:,-1],true[:,-1])
-    return mL+.4*bL
+    return mL+.5*bL
 
 
 def train_model(model,optimizer,epochs=1):
@@ -150,7 +150,7 @@ print("Total number of parameters is: {}".format(params))
 train_model(model, optimizer, epochs = EPOCHS)
 
 # save the model
-torch.save(model.state_dict(), 'models/ee400StopLSTMModel.pt')
+torch.save(model.state_dict(), 'models/ee600StopLSTMModel.pt')
 
 
 

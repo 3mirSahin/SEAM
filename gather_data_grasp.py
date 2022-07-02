@@ -1,14 +1,9 @@
 #based off of reinforcement learning env code
 
-'''this one is adjusted versus the initial one to always grab the cube depending on its orientation
-as the gripper is likely to perform better if it grasps the object with flat sides rather than non-flat sides
-
-Though, on a second thought, the approach to the cube will be the same since the approach is based on the gripper's orientation
-versus the cube. Due to this, only turning the cube in -45 to 45 degrees makes the most sense as the rest is equivariant. We wouldn't want the gripper to turn several times for a similar grip
-as the cube does not have a defined front or back.'''
 from os.path import dirname, join, abspath
 from pyrep import PyRep
 from pyrep.robots.arms.panda import Panda
+from pyrep.robots.end_effectors.panda_gripper import PandaGripper
 from pyrep.objects.shape import Shape
 from pyrep.const import PrimitiveShape
 from pyrep.errors import ConfigurationPathError
@@ -43,6 +38,7 @@ class Environment(object):
         self.pr.start()
         #--Robot
         self.agent = Panda()
+        self.gripper = PandaGripper()
         # self.agent.set_control_loop_enabled(False)
         # self.agent.set_motor_locked_at_zero_velocity(True)
         self.agent_ee_tip = self.agent.get_tip()
@@ -57,9 +53,9 @@ class Environment(object):
 
         #--Cube
         self.cube = Shape.create(type=PrimitiveShape.CUBOID,
-                                 size=[0.05, 0.05, 0.05],
-                                 color=[1.0, 0.1, 0.1],
-                                 static=True, respondable=False)
+                      size=[0.05, 0.05, 0.05],
+                      color=[1.0, 0.1, 0.1],
+                      static=False, respondable=True)
         self.target = Dummy.create()
 
         #--Cube Spawn
@@ -72,10 +68,10 @@ class Environment(object):
                         cube_min_max[3] - cube_size,
                         cube_min_max[5] - .05]
         self.position_min, self.position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]-.05], [cube_min_max[1],
-                                                                                                     cube_min_max[3],
-                                                                                                     cube_min_max[3]-.05]
-        self.target_min, self.target_max = [-.02, -.02, 0], [.02, .02, .02]
-        self.orient_min, self.orient_max = [0,0,math.radians(-45)], [0,0,math.radians(45)] #make s
+                                                                                           cube_min_max[3],
+                                                                                           cube_min_max[3]-.05]
+        self.target_min, self.target_max = [-.02, -.02, -.01], [.02, .02, .01]
+
         col_name = ["imLoc", "jVel", "jPos", "eeVel","eeJacVel", "eePos", "cPos","stop"]
         self.df = pd.DataFrame(columns=col_name)
         self.path=None
@@ -113,14 +109,13 @@ class Environment(object):
 
     def replaceCube(self):
         pos = list(np.random.uniform(self.position_min, self.position_max))
-        rot = list(np.random.uniform(self.orient_min,self.orient_max))
-        rotation = list()
         self.cube.set_position(pos, self.table)
-        self.cube.set_orientation(rot) #is table really the correct thing to base the orientation off of?
+        self.cube.set_orientation([0,0,0])
+        ori = self.cube.get_orientation()
         try:
             pp = self.agent.get_linear_path(
                 position=self.cube.get_position(),
-                euler=[0, math.radians(180), 0],
+                euler=[0, math.radians(180), math.radians(90)+ori[2]],
                 steps=100
             )
         except ConfigurationPathError as e:
@@ -129,13 +124,12 @@ class Environment(object):
         self.replaceTarget()
     def replaceTarget(self):
         targpos = list(np.random.uniform(self.target_min, self.target_max))
-
         self.target.set_position(targpos, self.cube)
-        self.target.set_orientation([0,0,0],self.cube) #giving the same orientation to the target as well.
+        ori = self.cube.get_orientation()
         try:
             self.path = self.agent.get_linear_path(
                 position=self.target.get_position(),
-                euler=[0, math.radians(180), math.radians(90)],
+                euler=[0, math.radians(180), math.radians(90)+ori[2]],
                 steps=100
             )
         except ConfigurationPathError as e:
@@ -172,24 +166,33 @@ class Environment(object):
         line = [location, joint_vel, joint_pos, ee_vel,ee_j_vel, ee_pos, cube_pos,stp]
         df_length = len(self.df)
         self.df.loc[df_length] = line
-    def get_path(self):
+    def get_path(self,cube=False):
         ori = self.cube.get_orientation()
-        self.path = self.agent.get_linear_path(
-            position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)-ori[2]], steps=100)
-        self.path_step = self.path._path_points
+        if not cube:
+            self.path = self.agent.get_linear_path(
+                position=self.target.get_position(), euler=[0, math.radians(180), math.radians(90)-ori[2]], steps=100)
+            self.path_step = self.path._path_points
+        else:
+            self.path = self.agent.get_linear_path(
+                position=self.cube.get_position(), euler=[0, math.radians(180), math.radians(90)-ori[2]], steps=100)
+            self.path_step = self.path._path_points
         # print(self.path_step)
 
     def checkStop(self):
         dist = self.ps.read()
+        # print(dist)
         done = False
-        if dist <= .12 and dist > 0:
+        if dist <= .15 and dist > 0:
+            print("reached")
             done = True
         return done
-    def step(self,pathstep = True):
+    def step(self,pathstep = True, gripstep=False):
         if pathstep:
             done = self.path.step()
+        if gripstep:
+            done = self.gripper.actuate(0,.1)
         self.pr.step()
-        if pathstep:
+        if pathstep or gripstep:
             return done
 
     def shutdown(self):
@@ -203,22 +206,35 @@ class Environment(object):
 
 
 env = Environment()
-for e in range(EPISODE):
+# for e in range(EPISODE):
+#     env.setup()
+#     env.replaceCube()
+for r in range(EPISODE):
     env.setup()
     env.replaceCube()
-    for r in range(RUNS):
-        env.setup()
-        env.replaceTarget()
-        env.get_path()
-        done=False
-        sq=0
-        while not done:
-            done = env.step()
-            # if not done:
-            #     env.gatherInfo(e,r,sq)
-            # else:
-            #     env.gatherInfo(e,r,sq,stop=True)
+    # env.replaceTarget()
+    env.get_path()
+    doneReach=False
+    doneGrip = False
+    sq=0
+    while not doneReach:
+        doneReach = env.step()
+        stp = env.checkStop()
+        # env.gatherInfo(e,r,sq,stop=stp)
+        sq+=1
+    if doneReach:
+        print("Reached")
+        while not doneGrip:
+            doneGrip = env.step(pathstep=False,gripstep=True)
             sq+=1
+    if doneReach and doneGrip:
+        print("Gripped")
+        for i in range(50):
+            new = env.agent.get_joint_positions()
+            new[0] += .1
+            env.agent.set_joint_target_positions(new)
+            env.step(pathstep=False)
+
         # if done:
         #
         #     for i in range(10):

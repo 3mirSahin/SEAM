@@ -108,3 +108,4 @@ class CNNLSTM(nn.Module):
             fin[:,-1] = torch.sigmoid(fin[:,-1])
 
         return fin
+

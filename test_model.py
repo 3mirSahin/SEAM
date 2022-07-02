@@ -54,7 +54,7 @@ if EEVEL:
 else:
     numparam = 13
 model = CNNLSTM(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/ee400StopLSTMModel.pt"))
+model.load_state_dict(torch.load("models/ee600StopLSTMModel.pt"))
 model.eval()
 model.start_newSeq()
 
@@ -93,9 +93,9 @@ cube_min_max = [cube_min_max[0] + cube_size,
                         cube_min_max[3] - cube_size,
                         cube_min_max[5] - .05]
 
-position_min, position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]], [cube_min_max[1],
+position_min, position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[3]-.05], [cube_min_max[1],
                                                                                            cube_min_max[3],
-                                                                                           cube_min_max[3]]
+                                                                                           cube_min_max[3]-.05]
 def resetEnv():
     agent.set_joint_target_velocities(np.zeros_like(agent.get_joint_target_velocities()))
     agent.set_motor_locked_at_zero_velocity(True)
@@ -210,7 +210,7 @@ for _ in range(RUNS):
 
 
         agent.set_joint_target_velocities(jointVel)
-        if res[0][-1] >= .5 and STOP:
+        if res[0][-1] >= .6 and STOP:
             # done = True
 
             agent.set_joint_target_velocities([0,0,0,0,0,0,0])
