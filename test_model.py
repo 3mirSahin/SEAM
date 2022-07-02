@@ -14,6 +14,7 @@ from pyrep.objects.dummy import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
 from pyrep.objects.camera import Camera
 from pyrep.objects.proximity_sensor import ProximitySensor
+from pyrep.backend import sim
 
 import numpy as np
 import math
@@ -33,6 +34,8 @@ from torch.utils.data import sampler
 from torchvision import datasets, transforms
 
 from SimpleCNNModel import SCNN
+from CNNLSTMModel import CNNLSTM
+
 STOP = False
 EEVEL = True
 #back to work
@@ -73,9 +76,10 @@ if EEVEL:
     numparam = 12
 else:
     numparam = 13
-model = SCNN(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/eeModel.pt"))
+model = CNNLSTM(stop=STOP,num_outputs=numparam)
+model.load_state_dict(torch.load("models/ee400LSTMModel.pt"))
 model.eval()
+model.start_newSeq()
 
 cube_min_max = table.get_bounding_box()
 cube_min_max = [cube_min_max[0] + cube_size,
@@ -111,6 +115,27 @@ pr.step()
 
 stops = []
 
+read = pd.read_csv("lol.csv")
+
+
+def get_trueJacobian(robot):
+    robot._ik_target.set_matrix(robot._ik_tip.get_matrix())
+    sim.simCheckIkGroup(robot._ik_group,
+                        [j.get_handle() for j in robot.joints])
+    jacobian, (rows, cols) = sim.simGetIkGroupMatrix(robot._ik_group, 0)
+    jacobian = np.array(jacobian).reshape((rows, cols), order='F')
+    return np.flip(jacobian, axis=0)
+def get_jointVelo(robot, v: np.ndarray) -> np.ndarray:
+    robot.set_ik_element_properties(constraint_alpha_beta=True, constraint_gamma=True)
+    # v = v[:3]
+    # R = robot.get_matrix()[:3,:3]
+    # v = np.matmul(np.linalg.inv(R), v)
+    J = get_trueJacobian(robot)
+    # J = robot.get_jacobian()
+    # print(J.T.shape)
+    # print(v.shape)
+    q = np.matmul(np.linalg.pinv(J.T), v)
+    return q
 
 while not done:
     #take the image from the robot
@@ -121,14 +146,34 @@ while not done:
     #shove it into the model
     res = model(img)
     res = res.tolist()
+
+
     # print(res)
     #only take the joint velocities
     if EEVEL:
-        eeVel = res[0][:6]
-        jacob = agent.get_jacobian()
 
-        jointVel = eeVel@np.transpose(jacob)
-        #use the jacobian to calculate jointvel
+        # jVel = [float(item) for item in read['jVel'][count].split(",")]
+        # eeVel = [float(item) for item in read['eeJacVel'][count].split(",")]
+        eeVel = res[0][:6]
+
+
+
+        # jacob = get_trueJacobian(agent).T
+        # jacob = agent.get_jacobian().T
+
+        # eVel = jacob@jVel
+        # print(eeVel)
+        # print(eVel)
+        # print("-----")
+
+        #let's feed in the training data
+
+        jointVel = get_jointVelo(agent,eeVel)
+        # jointVel = np.flip(jointVel,axis=0)
+        # jointVel = jVel
+
+        # jointVel = np.flip(jointVel,axis=0)
+        # use the jacobian to calculate jointvel
     else:
         jointVel = res[0][:7]
     # print(jointVel)
@@ -143,7 +188,7 @@ while not done:
     stops.append(res[0][-1])
     if dist<=.11 and dist > 0:
         done = True
-    if count >= 500:
+    if count >= 100:
         done = True
 
 print(max(stops))

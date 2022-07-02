@@ -15,9 +15,10 @@ import PIL
 import PIL.Image as Image
 import random
 from SimpleCNNModel import SCNN
+from CNNLSTMModel import CNNLSTM
 
 #IMPORTANT GENERAL STUFF
-EPOCHS = 50
+EPOCHS = 15
 BATCH_SIZE = 64
 LR = 0.0005
 WD = 1e-7
@@ -57,7 +58,7 @@ class SimDataset(Dataset):
             jointVel = [float(item) for item in self.df['jVel'][index].split(",")]
             main = jointVel
         else:
-            eeVel = [float(item) for item in self.df['eeVel'][index].split(",")]
+            eeVel = [float(item) for item in self.df['eeJacVel'][index].split(",")]
             main = eeVel
         eePos = [float(item) for item in self.df['eePos'][index].split(",")]
         cPos = [float(item) for item in self.df['cPos'][index].split(",")]
@@ -137,9 +138,12 @@ def train_model(model,optimizer,epochs=1):
                 print('Epoch: %d, Iteration %d, loss = %.4f' % (e, t, loss.item()))
 
 torch.cuda.empty_cache()
-# define and train the network
-model = SCNN(stop=STOP,num_outputs=12) #same sizing for both ResNet34 and 50 depending on the type of residual layer used
-optimizer = optim.Adamax(model.parameters(), lr=LR, weight_decay=WD)
+if EEVEL:
+    numparam = 12
+else:
+    numparam = 13
+model = CNNLSTM(stop=STOP,num_outputs=numparam) #same sizing for both ResNet34 and 50 depending on the type of residual layer used
+optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WD)
 
 params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Total number of parameters is: {}".format(params))
@@ -147,7 +151,7 @@ print("Total number of parameters is: {}".format(params))
 train_model(model, optimizer, epochs = EPOCHS)
 
 # save the model
-torch.save(model.state_dict(), 'models/eeModel.pt')
+torch.save(model.state_dict(), 'models/ee400LSTMModel.pt')
 
 
 

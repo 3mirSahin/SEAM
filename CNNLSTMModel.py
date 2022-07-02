@@ -8,35 +8,62 @@ from torch.utils.data import sampler
 from torchvision import datasets, transforms
 from SimpleCNNModel import SCNN
 
-class CNN(nn.Module):
-    def __init__(self):
-        super(SCNN).__init__()
-        self.fc = nn.Linear(256*8*8,320)
-    def forward(self,x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
 
-        return x
 class CNNLSTM(nn.Module):
-    def __init__(self,num_outputs = 13):
+    def __init__(self,num_outputs = 13,fconv=[3,1,1],stop = False):
         super(CNNLSTM,self).__init__()
-        self.cnn = SCNN()
+        self.num_outputs = num_outputs
+
+        self.conv1 = self.conv_layer(3, 64)
+        self.conv2 = self.conv_layer(64, 128)
+        self.conv3 = self.conv_layer(128, 256)
+
+
+        self.out = nn.Linear(128,self.num_outputs)
+
+        self.fc = nn.Linear(256*8*8,256)
         self.rnn = nn.LSTM(
-            input_size = 320,
-            hidden_size= 64,
+            input_size = 256,
+            hidden_size= 128,
             num_layers= 1,
             batch_first=True
         )
         self.linear = nn.Linear(64,num_outputs)
-    def forward(self,x):
-        batch_size, timesteps, C, H, W = x.size()
-        c_in = x.view(batch_size * timesteps, C, H, W)
-        c_out = self.cnn(c_in)
-        r_in = c_out.view(batch_size, timesteps, -1)
-        r_out, (h_n, h_c) = self.rnn(r_in)
-        r_out2 = self.linear(r_out[:, -1, :])
 
-        return r_out2
+        self.h, self.c = None,None
+    def conv_layer(
+        self,
+        chIN,
+        chOUT,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        bias=False,
+        pool_kernel=3,
+        pool_stride=2,
+        pool_padding=1
+    ):
+        conv = nn.Sequential(nn.Conv2d(chIN, chOUT, kernel_size, stride, padding, bias=bias),
+                             nn.BatchNorm2d(chOUT),
+                             nn.MaxPool2d(pool_kernel, pool_stride, pool_padding),
+                             nn.ReLU(inplace=True))
+        return conv
+    def start_newSeq(self):
+        self.h = torch.zeros((1,128))
+        self.c = torch.zeros((1,128))
+    def forward(self,x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        if self.training:
+            x = x.view(x.size(0),-1)
+            x = self.fc(x)
+            x, _ = self.rnn(x)
+
+        else:
+            x = x.view(x.size(0),-1)
+            x = self.fc(x)
+            x, (self.h, self.c) = self.rnn(x, (self.h,self.c))
+
+        return self.out(x)
+
