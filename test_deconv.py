@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import sampler
 from torchvision import datasets, transforms
 
-from deep_models import SCNN, CNNLSTM
+from deep_models import CNNLSTM, SCNN, GripDecoder, ClawLSTMEncoder
 
 '''Configurations for the test instance.'''
 RUNS = 10 #the total number of test attempts done. Changes the cube location.
@@ -50,11 +50,11 @@ transform = transforms.Compose(
 
 '''Model Choice'''
 if EEVEL:
-    numparam = 12
+    numparam = 9
 else:
-    numparam = 13
-model = CNNLSTM(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/eeOrientStopLSTMModel.pt"))
+    numparam = 10
+model = GripDecoder(stop=STOP,num_outputs=numparam)
+model.load_state_dict(torch.load("models/dConvGrip1.pt"))
 model.eval()
 model.start_newSeq()
 
@@ -82,8 +82,8 @@ target = Dummy.create()
 cube_size = .1
 table= Shape('diningTable_visible')
 
-
-
+lFinger = Dummy("LeftFinger")
+rFinger = Dummy("RightFinger")
 
 '''Cube Movement'''
 cube_min_max = table.get_bounding_box()
@@ -173,8 +173,17 @@ for _ in range(RUNS):
         img = Image.fromarray((img * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
         img = transform(img)
         img = img.unsqueeze(0)
+
+        eP = agent.get_tip().get_position(agent)
+        lP = lFinger.get_position(agent)
+        rP = rFinger.get_position(agent)
+
+        pos = np.array([[[lP, eP, rP]]])
+        pos = torch.tensor(pos,dtype=torch.float32)
+        print(pos)
+        print(img.shape)
         #shove it into the model
-        res = model(img)
+        res = model(img,pos)
         res = res.tolist()
 
 

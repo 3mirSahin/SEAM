@@ -56,6 +56,9 @@ class Environment(object):
                       static=True, respondable=False)
         self.target = Dummy.create()
 
+        self.lFinger = Dummy("LeftFinger")
+        self.rFinger = Dummy("RightFinger")
+
         #--Cube Spawn
         cube_size = .1
         self.table = Shape('diningTable_visible')
@@ -70,7 +73,7 @@ class Environment(object):
                                                                                            cube_min_max[3]-.05]
         self.target_min, self.target_max = [-.02, -.02, 0], [.02, .02, .02]
         self.orient_min, self.orient_max = [0, 0, 0], [0, 0, 0]#[0, 0, math.radians(-45)], [0, 0, math.radians(45)]
-        col_name = ["imLoc", "jVel", "jPos", "eeVel","eeJacVel", "eePos", "cPos","stop"]
+        col_name = ["imLoc", "jVel", "jPos", "eeVel","eeJacVel", "eePos", "cPos","lFin","rFin","stop"]
         self.df = pd.DataFrame(columns=col_name)
         self.path=None
         self.path_step = None
@@ -154,6 +157,8 @@ class Environment(object):
         ee_j_vel = ",".join(np.array(jacob@jVel).astype(str))
         ee_vel = ",".join(np.concatenate(list(self.agent.get_tip().get_velocity()), axis=0).astype(str))
         cube_pos = ",".join(self.cube.get_position(relative_to=self.agent).astype(str))
+        l_fin = ",".join(self.lFinger.get_position(relative_to=self.agent).astype(str))
+        r_fin = ",".join(self.rFinger.get_position(relative_to=self.agent).astype(str))
         #this is to try and teach the last frame to the neural network.
         stp = 0
         if stop:
@@ -161,7 +166,7 @@ class Environment(object):
         # if stop:
         #     joint_vel = ",".join(np.zeros_like(np.array(self.agent.get_joint_velocities())).astype(str))
         #     ee_vel = ",".join(np.zeros_like(np.concatenate(list(self.agent.get_tip().get_velocity()), axis=0)).astype(str))
-        line = [location, joint_vel, joint_pos, ee_vel,ee_j_vel, ee_pos, cube_pos,stp]
+        line = [location, joint_vel, joint_pos, ee_vel,ee_j_vel, ee_pos, cube_pos,l_fin,r_fin,stp]
         df_length = len(self.df)
         self.df.loc[df_length] = line
     def get_path(self):
