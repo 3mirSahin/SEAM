@@ -54,7 +54,7 @@ if EEVEL:
 else:
     numparam = 13
 model = CNNLSTM(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/eeOrientStopLSTMModel.pt"))
+model.load_state_dict(torch.load("models/stopOrCNNLSTM.pt"))
 model.eval()
 model.start_newSeq()
 
@@ -156,6 +156,7 @@ def checkEEBoundary(ee, target):
 
 correct = 0
 for _ in range(RUNS):
+    model.start_newSeq()
     resetEnv()
     replaceCube()
 
@@ -165,12 +166,13 @@ for _ in range(RUNS):
 
     stops = []
 
-    read = pd.read_csv("lol.csv")
+    # read = pd.read_csv("lol.csv")
 
     while not done:
         #take the image from the robot
         img = vs.capture_rgb()
         img = Image.fromarray((img * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
+        img = transforms.functional.rotate(img,90)
         img = transform(img)
         img = img.unsqueeze(0)
         #shove it into the model

@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import sampler
 from torchvision import datasets, transforms
 
+
 #This file aims to keep all the machine learning models in one place to easily access them rather than creating a different file for each.
 
 class SCNN(nn.Module):
@@ -293,3 +294,4 @@ class ClawLSTMEncoder(nn.Module):
             fin[:,-1] = torch.sigmoid(fin[:,-1])
 
         return fin
+
