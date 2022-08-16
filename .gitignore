@@ -1,5 +1,8 @@
 images/
 *.csv
 *.pt
-models/
+trained_models/
 venv/
+action_image/
+orImages/
+sideImages/

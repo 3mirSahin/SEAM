@@ -6,34 +6,23 @@ from pyrep.const import PrimitiveShape
 from pyrep.errors import ConfigurationPathError
 from pyrep.objects.dummy import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
-from pyrep.objects.camera import Camera
 from pyrep.objects.proximity_sensor import ProximitySensor
 from pyrep.backend import sim
 
 import numpy as np
 import math
-import pandas as pd
-import os
-import PIL
 from PIL import Image
-from pyrep.objects.joint import JointMode
 
 import torch
-from torch.nn import Conv2d, MaxPool2d
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data import sampler
-from torchvision import datasets, transforms
+from torchvision import transforms
 
-from deep_models import SCNN, CNNLSTM
+from model_outlines.deep_models import CNNLSTM
 
 '''Configurations for the test instance.'''
 RUNS = 10 #the total number of test attempts done. Changes the cube location.
 STOP = True
 EEVEL = True
-SCENE_FILE = join(dirname(abspath(__file__)), 'simulations/scene_panda_reach_target.ttt')
+SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_target.ttt')
 
 '''Model Hyperparameters'''
 device = torch.device('cpu')
@@ -54,7 +43,7 @@ if EEVEL:
 else:
     numparam = 13
 model = CNNLSTM(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/stopOrCNNLSTM.pt"))
+model.load_state_dict(torch.load("trained_models/stopOrCNNLSTM.pt"))
 model.eval()
 model.start_newSeq()
 

@@ -1,25 +1,18 @@
 import torch
-from torch.nn import Conv2d, MaxPool2d
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.data import sampler
-from torchvision import datasets, transforms
-from os.path import dirname, join, abspath
+from torchvision import transforms
 import numpy as np
-import math
 import pandas as pd
-import matplotlib.pyplot as plt
-import PIL
 import PIL.Image as Image
-import random
-from deep_models import CNNLSTM, SCNN
+from model_outlines.deep_models import ClawLSTMEncoder
 
 #IMPORTANT GENERAL STUFF
 EPOCHS = 20
-BATCH_SIZE = 32
-LR = 0.0001
+BATCH_SIZE = 128 #64
+LR = 0.001 #.0004 for GripDecoder
 WD = 1e-7
 TIMESTEP = 4
 USE_GPU = True
@@ -60,14 +53,15 @@ class SimDataset(Dataset):
             eeVel = [float(item) for item in self.df['eeJacVel'][index].split(",")]
             main = eeVel
         eePos = [float(item) for item in self.df['eePos'][index].split(",")]
+        lPos = [float(item) for item in self.df["lFin"][index].split(",")]
+        rPos = [float(item) for item in self.df["rFin"][index].split(",")]
         cPos = [float(item) for item in self.df['cPos'][index].split(",")]
         # print(main)
         if self.stop:
             stop = self.df['stop'][index]
 
         # #push them into a single array so that we can output them without much issue here. MIGHT WANT TO CHANGE THIS LATER!!!
-
-        main.extend(eePos)
+        pos = np.array([[lPos,eePos,rPos]])
         main.extend(cPos)
         if self.stop:
             main.append(stop)
@@ -76,12 +70,12 @@ class SimDataset(Dataset):
         image = Image.open(filename)
         if self.transform is not None:
             image = self.transform(image)
-        return image,np.array(main)
+        return image,pos,np.array(main)
 
         # return image, jointVel,eePos,cPos
 
 
-trainSet = SimDataset("orient.csv",transform,EEVEL,STOP)
+trainSet = SimDataset("../sequences/lol.csv", transform, EEVEL, STOP)
 
 # print(len(trainSet[0][1])+len(trainSet[0][2])+len(trainSet[0][3]))
 #May want to create a trainining and validation set for later
@@ -98,7 +92,7 @@ if USE_GPU and torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-print_every = 10
+print_every = 100
 dtype = torch.float32
 def lossWStop(out,true):
     mL = F.mse_loss(out[:,:-1],true[:,:-1])
@@ -107,21 +101,24 @@ def lossWStop(out,true):
 
 
 def train_model(model,optimizer,epochs=1):
+    lossHist = []
     model = model.to(device=device)
     mseLoss = nn.MSELoss()
     for e in range(epochs):
-        for t, (x, jv) in enumerate(trainLoader):
+        eLoss = 0
+        for t, (x,pos, jv) in enumerate(trainLoader):
         # for t, (x,jv, ep, cp) in enumerate(trainLoader):
             model.train()
             x = x.to(device=device,dtype=dtype)
-            # jv.extend(ep)
-            # jv.extend(cp)
+            pos = pos.to(device=device,dtype=dtype)
             jv = jv.to(device=device,dtype=dtype)
 
             # ep = ep.to(device=device,dtype=torch.long)
             # cp = cp.to(device=device,dtype=torch.long)
+            # print(x.shape)
+            # print("-----")
 
-            out = model(x)
+            out = model(x,pos)
             if not STOP:
                 loss = mseLoss(out,jv)
             else:
@@ -135,22 +132,28 @@ def train_model(model,optimizer,epochs=1):
 
             if t % print_every == 0:
                 print('Epoch: %d, Iteration %d, loss = %.4f' % (e, t, loss.item()))
+            eLoss += loss.item()
+        print("Epoch: %d, Loss Avg: %.4f" % (e,eLoss/t))
+        lossHist.append(eLoss/t)
+    return lossHist
 
 torch.cuda.empty_cache()
 if EEVEL:
-    numparam = 12
+    numparam = 9
 else:
-    numparam = 13
-model = CNNLSTM(stop=STOP,num_outputs=numparam) #same sizing for both ResNet34 and 50 depending on the type of residual layer used
+    numparam = 10
+model = ClawLSTMEncoder(stop=STOP,num_outputs=numparam) #same sizing for both ResNet34 and 50 depending on the type of residual layer used
 optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WD)
 
 params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Total number of parameters is: {}".format(params))
 
-train_model(model, optimizer, epochs = EPOCHS)
+lossHist = train_model(model, optimizer, epochs = EPOCHS)
+
+print(min(lossHist), np.argmin(np.array(lossHist)))
 
 # save the model
-torch.save(model.state_dict(), 'models/sideOrLSTM.pt')
+torch.save(model.state_dict(), '../trained_models/dConvGripLSTM1.pt')
 
 
 

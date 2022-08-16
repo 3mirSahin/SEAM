@@ -1,31 +1,24 @@
 import torch
-from torch.nn import Conv2d, MaxPool2d
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-from torch.utils.data import sampler
-from torchvision import datasets, transforms
-from os.path import dirname, join, abspath
+from torchvision import transforms
 import numpy as np
-import math
 import pandas as pd
-import matplotlib.pyplot as plt
-import PIL
 import PIL.Image as Image
-import random
-from deep_models import CNNLSTM, SCNN
-from equivariant_models import equCNNTest, equCNNLSTM, seperate_stop_eCNN_GRU, dihCNNLSTM
-import e2cnn.nn
+from model_outlines.deep_models import CNNLSTM
 
 #IMPORTANT GENERAL STUFF
-EPOCHS = 20 #orient 10
+EPOCHS = 20
 BATCH_SIZE = 32
-LR = 0.0001 #.0001 for all models except for normal simple equ
+LR = 0.0001
 WD = 1e-7
+TIMESTEP = 4
 USE_GPU = True
 EEVEL = True
 STOP = True
+# MODEL = "CNNLSTM"
 
 
 #setup image transforms
@@ -34,9 +27,6 @@ std = torch.Tensor([0.229, 0.224, 0.225])
 #need to transform and need to normalize after
 transform = transforms.Compose(
         [
-            # transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
-            # transforms.RandomRotation((0,180)),
             transforms.ToTensor(),
             transforms.Normalize(mean.tolist(), std.tolist())
         ]
@@ -84,7 +74,7 @@ class SimDataset(Dataset):
         # return image, jointVel,eePos,cPos
 
 
-trainSet = SimDataset("side.csv",transform,EEVEL,STOP)
+trainSet = SimDataset("../sequences/orient.csv", transform, EEVEL, STOP)
 
 # print(len(trainSet[0][1])+len(trainSet[0][2])+len(trainSet[0][3]))
 #May want to create a trainining and validation set for later
@@ -106,23 +96,15 @@ dtype = torch.float32
 def lossWStop(out,true):
     mL = F.mse_loss(out[:,:-1],true[:,:-1])
     bL = F.binary_cross_entropy(out[:,-1],true[:,-1])
-    return mL+.4*bL
-def sepLossWStop(out,stop,true):
-    mL = F.mse_loss(out,true[:,:-1])
-    # print(stop)
-    # print(true[:,-1])
-    bL = F.binary_cross_entropy(stop,true[:,-1])
-    return mL+.4*bL
+    return mL+.5*bL
+
 
 def train_model(model,optimizer,epochs=1):
     model = model.to(device=device)
     mseLoss = nn.MSELoss()
-    hist = []
-
     for e in range(epochs):
-        eHist = []
         for t, (x, jv) in enumerate(trainLoader):
-            # for t, (x,jv, ep, cp) in enumerate(trainLoader):
+        # for t, (x,jv, ep, cp) in enumerate(trainLoader):
             model.train()
             x = x.to(device=device,dtype=dtype)
             # jv.extend(ep)
@@ -133,48 +115,36 @@ def train_model(model,optimizer,epochs=1):
             # cp = cp.to(device=device,dtype=torch.long)
 
             out = model(x)
-            # out, stop = model(x)
-            # stop = torch.squeeze(stop)
-            # print(out.shape)
-            # print(jv.shape)
-
             if not STOP:
                 loss = mseLoss(out,jv)
             else:
                 loss = lossWStop(out,jv)
-                # loss = sepLossWStop(out,stop,jv)
-            # print(loss)
+
             optimizer.zero_grad()
 
             loss.backward()
 
             optimizer.step()
-            eHist.append(loss.item())
+
             if t % print_every == 0:
                 print('Epoch: %d, Iteration %d, loss = %.4f' % (e, t, loss.item()))
-        mHist = np.mean(eHist)
-        hist.append(mHist)
-    return hist
 
 torch.cuda.empty_cache()
 if EEVEL:
     numparam = 12
 else:
     numparam = 13
-# print(numparam)
-model = dihCNNLSTM(stop=STOP,num_outputs=numparam) #same sizing for both ResNet34 and 50 depending on the type of residual layer used
+model = CNNLSTM(stop=STOP,num_outputs=numparam) #same sizing for both ResNet34 and 50 depending on the type of residual layer used
 optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WD)
 
 params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Total number of parameters is: {}".format(params))
 
-hist = train_model(model, optimizer, epochs = EPOCHS)
+train_model(model, optimizer, epochs = EPOCHS)
 
 # save the model
-torch.save(model.state_dict(), 'models/dihLSTMSide.pt')
+torch.save(model.state_dict(), 'trained_models/sideOrLSTM.pt')
 
-plt.plot(hist)
-plt.show()
 
 
 

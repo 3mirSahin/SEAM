@@ -6,35 +6,25 @@ from pyrep.const import PrimitiveShape
 from pyrep.errors import ConfigurationPathError
 from pyrep.objects.dummy import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
-from pyrep.objects.camera import Camera
 from pyrep.objects.proximity_sensor import ProximitySensor
 from pyrep.backend import sim
 
 import numpy as np
 import math
-import pandas as pd
-import os
-import PIL
 from PIL import Image
-from pyrep.objects.joint import JointMode
 
 import torch
-from torch.nn import Conv2d, MaxPool2d
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data import sampler
-from torchvision import datasets, transforms
+from torchvision import transforms
 
-from deep_models import CNNLSTM, SCNN, GripDecoder, ClawLSTMEncoder
+from model_outlines.equivariant_models import dihCNNLSTM
 
 '''Configurations for the test instance.'''
-RUNS = 10 #the total number of test attempts done. Changes the cube location.
+RUNS = 30 #the total number of test attempts done. Changes the cube location.
 STOP = True
 EEVEL = True
-SCENE_FILE = join(dirname(abspath(__file__)), 'simulations/scene_panda_reach_target.ttt')
-TEST_ORIENT = True
+SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_target.ttt')
+TEST_ORIENT = False
+useLSTM = True
 '''Model Hyperparameters'''
 device = torch.device('cpu')
 
@@ -43,6 +33,9 @@ std = torch.Tensor([0.229, 0.224, 0.225])
 #need to transform and need to normalize after
 transform = transforms.Compose(
         [
+            # transforms.RandomVerticalFlip(1),
+            # transforms.RandomHorizontalFlip(1),
+            # transforms.functional.rotate(),
             transforms.ToTensor(),
             transforms.Normalize(mean.tolist(), std.tolist())
         ]
@@ -50,13 +43,16 @@ transform = transforms.Compose(
 
 '''Model Choice'''
 if EEVEL:
-    numparam = 9
+    numparam = 12
 else:
-    numparam = 10
-model = GripDecoder(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("models/dConvGrip1.pt"))
+    numparam = 13
+
+model = dihCNNLSTM(stop=STOP,num_outputs=numparam)
+model.train()
+model.load_state_dict(torch.load("trained_models/dihLSTM.pt"))
 model.eval()
-model.start_newSeq()
+
+orient_min, orient_max = [0,0,math.radians(-45)], [0,0,math.radians(45)]
 
 '''PyRep Setup'''
 pr = PyRep()
@@ -82,8 +78,8 @@ target = Dummy.create()
 cube_size = .1
 table= Shape('diningTable_visible')
 
-lFinger = Dummy("LeftFinger")
-rFinger = Dummy("RightFinger")
+
+
 
 '''Cube Movement'''
 cube_min_max = table.get_bounding_box()
@@ -107,8 +103,10 @@ def resetEnv():
 
 def replaceCube():
     pos = list(np.random.uniform(position_min, position_max))
+    rot = list(np.random.uniform(orient_min, orient_max))
     cube.set_position(pos, table)
-
+    if TEST_ORIENT:
+        cube.set_orientation(rot)
     try:
         pp = agent.get_linear_path(
             position=cube.get_position(),
@@ -157,6 +155,8 @@ def checkEEBoundary(ee, target):
 
 correct = 0
 for _ in range(RUNS):
+    if useLSTM:
+        model.start_newSeq()
     resetEnv()
     replaceCube()
 
@@ -166,25 +166,18 @@ for _ in range(RUNS):
 
     stops = []
 
-    read = pd.read_csv("lol.csv")
-
     while not done:
         #take the image from the robot
         img = vs.capture_rgb()
         img = Image.fromarray((img * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
+        # img = transforms.functional.rotate(img,180)
         img = transform(img)
         img = img.unsqueeze(0)
-
-        eP = agent.get_tip().get_position(agent)
-        lP = lFinger.get_position(agent)
-        rP = rFinger.get_position(agent)
-
-        pos = np.array([[[lP, eP, rP]]])
-        pos = torch.tensor(pos,dtype=torch.float32)
-        print(pos)
-        print(img.shape)
         #shove it into the model
-        res = model(img,pos)
+        # res, stop = model(img)
+        res = model(img)
+        # print(res.size)
+        stop = res[0][-1]
         res = res.tolist()
 
 
@@ -220,7 +213,7 @@ for _ in range(RUNS):
 
 
         agent.set_joint_target_velocities(jointVel)
-        if res[0][-1] >= .6 and STOP:
+        if stop >= .6 and STOP:
             # done = True
 
             agent.set_joint_target_velocities([0,0,0,0,0,0,0])
