@@ -8,15 +8,15 @@ from e2cnn import nn
 class DoubleConv(torch.nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+    def __init__(self, in_channels, out_channels, mid_channels=None,kernel_size = 3):
         super().__init__()
         if not mid_channels:
             mid_channels = out_channels
         self.double_conv = torch.nn.Sequential(
-            torch.nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+            torch.nn.Conv2d(in_channels, mid_channels, kernel_size=kernel_size, padding=1, bias=False),
             torch.nn.BatchNorm2d(mid_channels),
             torch.nn.ReLU(inplace=True),
-            torch.nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            torch.nn.Conv2d(mid_channels, out_channels, kernel_size=kernel_size, padding=1, bias=False),
             torch.nn.BatchNorm2d(out_channels),
             torch.nn.ReLU(inplace=True)
         )
@@ -266,5 +266,111 @@ class EqUNetFloor(torch.nn.Module):
         out = self.out(x).tensor
         return out
 
-# class rotCNN(torch.nn.Module):
-#     def __init__(self):
+#Rotational Models - these are only to determine the final rotation of the end effector when it's reaching for the item. We feed in a cropped image of the item right in to calculate the final rotation
+
+class rotCNN(torch.nn.Module):
+    def __init__(self, in_channels, n_rotations, n_primitives, n_hidden=32):
+        super(rotCNN,self).__init__()
+        self.n_rotations = n_rotations
+        self.n_primitives = n_primitives
+
+
+        n1 = int(n_hidden / 4)
+        n2 = int(n_hidden / 2)
+        n3 = n_hidden
+        self.conv = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, n1, kernel_size=7, padding=3),
+            torch.nn.ReLU(),
+
+            DoubleConv(n1, n2, kernel_size=3),
+            torch.nn.MaxPool2d(2),
+
+            DoubleConv(n2, n3, kernel_size=3),
+            torch.nn.MaxPool2d(2),
+        )
+
+        self.conv_2 = torch.nn.Sequential(
+            torch.nn.Conv2d(n3, n_primitives * n_rotations, kernel_size=4, padding=0),
+        )
+
+    def forward(self, img):
+        batch_size = img.size(0)
+        x = self.conv(img)
+
+        x = self.conv_2(x)
+        # print(x.shape)
+        x = x.reshape(batch_size, 2, self.n_primitives, -1)
+        # print(x.shape)
+        # x = self.softmax(x)[:, 1, :] #softmax is not necessary for ce
+        x = x[:,1,:]
+        # print(x.shape)
+        x = x.reshape(batch_size, self.n_primitives, -1)
+        # print(x.shape)
+        return x
+
+class rotEqCNN(torch.nn.Module):
+    def __init__(self, in_channels, n_rotations, n_primitives, n_hidden=32):
+        super(rotEqCNN,self).__init__()
+        self.n_rotations = n_rotations
+        self.n_primitives = n_primitives
+        self.N = n_rotations
+        self.in_channels = in_channels
+
+        self.r2_act = gspaces.Rot2dOnR2(N=self.N)
+        self.inrep = self.r2_act.trivial_repr
+        self.outrep = self.r2_act.regular_repr
+
+
+
+        n1 = int(n_hidden / 4)
+        n2 = int(n_hidden / 2)
+        n3 = n_hidden
+        # self.conv = nn.SequentialModule(
+        #     nn.R2Conv(
+        #         nn.FieldType(self.r2_act, in_channels*[self.inrep]),
+        #         nn.FieldType(self.r2_act, n1*[self.outrep]),
+        #         kernel_size = 7, padding = 3,initialize=True
+        #     ),
+        #     nn.ReLU(nn.FieldType(self.r2_act,n1*[self.outrep])),
+        #
+        #     EqDoubleConv(n1,n2,N=self.N,flip=False),
+        #     nn.PointwiseMaxPool(nn.FieldType(self.r2_act,n2*[self.outrep]),2),
+        #
+        #     EqDoubleConv(n2, n3, N=self.N, flip=False),
+        #     nn.PointwiseMaxPool(nn.FieldType(self.r2_act, n3 * [self.outrep]),2)
+        # )
+        self.conv_0 = nn.SequentialModule(
+            nn.R2Conv(
+                nn.FieldType(self.r2_act, in_channels*[self.r2_act.trivial_repr]),
+                nn.FieldType(self.r2_act, n1*[self.r2_act.regular_repr]),
+                kernel_size = 7, padding = 3,initialize=True),
+            nn.ReLU(nn.FieldType(self.r2_act,n1*[self.outrep])),)
+        self.conv_1 = EqDoubleConv(n1,n2,N=self.N,flip=False)
+        self.pool_1 = nn.PointwiseMaxPool(nn.FieldType(self.r2_act,n2*[self.outrep]),2)
+
+        self.conv_2 = EqDoubleConv(n2,n3,N=self.N,flip=False)
+        self.pool_2 = nn.PointwiseMaxPool(nn.FieldType(self.r2_act,n3*[self.outrep]),2)
+
+        output_rep = n_primitives * [self.outrep]
+        self.conv_3 = nn.R2Conv(
+            nn.FieldType(self.r2_act, n3 * [self.outrep]),
+            nn.FieldType(self.r2_act, output_rep),
+            kernel_size=4, padding=0, initialize=True
+        )
+
+    def forward(self, img):
+        batch_size = img.size(0)
+        img = nn.GeometricTensor(img,
+                                 nn.FieldType(self.r2_act, self.in_channels * [self.inrep]))
+        # x = self.conv(img)
+        x = self.conv_0(img)
+        x = self.conv_1(x)
+        x = self.pool_1(x)
+        x = self.conv_2(x)
+        x = self.pool_2(x)
+        x = self.conv_3(x).tensor
+        x = x.reshape(batch_size, 2, self.n_primitives, -1)
+        x = x[:,1,:]
+        x = x.reshape(batch_size, self.n_primitives, -1)
+        return x
+

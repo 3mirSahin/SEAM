@@ -34,6 +34,8 @@ GRAD = True #If you want the gradient output using L1 - the further away the end
 VerticalStop = False #Only trains on one vertical side
 HorizontalStop = False #only trains on one horizontal side
 RECTANGLE = True
+ROTATIONS = True
+BINSIZE = 16
 
 
 
@@ -89,8 +91,8 @@ class Environment(object):
             self.position_max[1] = self.position_max[1] / 2
         print(cube_min_max)
 
-        self.orient_min, self.orient_max = [0,0,math.radians(-45)], [0,0,math.radians(45)] #make s
-        col_name = ["imLoc", "outLoc","cubePos","cubeRot"]
+        self.orient_min, self.orient_max = [0,0,math.radians(-90)], [0,0,math.radians(90)] #make s
+        col_name = ["imLoc", "outLoc","cropLoc","rotBin","cubePos","cubeRot"]
         self.df = pd.DataFrame(columns=col_name)
         self.path = None
         self.path_step = None
@@ -165,21 +167,85 @@ class Environment(object):
                 if 0 <= (x+i) < sensor_size[1]:
                     pixels[y,x+i] = int(.80 * 255)
         #rotate based on ee rotation:
-        rot = math.degrees(self.agent_ee_tip.get_orientation()[2])
-        img = img.rotate(rot)
+        img = ImageOps.mirror(img)
+        rot = -int(math.degrees(self.vs.get_orientation()[2]))
+        print(rot)
+        # img = img.rotate(rot)
 
 
 
 
-        return img
+        return img,(x,y)
+    def generateCroppedImg(self,img,coord):
+        # img = ImageOps.flip(img)
+        # img = ImageOps.mirror(img)
+        #add padding
+        pix = img.load()
+        img = ImageOps.expand(img, border=10, fill=pix[63,63])
+
+        #return cropped version
+        cropLoc = (coord[1],coord[0],coord[1]+20,coord[0]+20)
+        print(cropLoc)
+        ret = img.crop(cropLoc)
+        # ret = ImageOps.mirror(ret)
+        # ret = ImageOps.flip(ret)
+        return ret
+
+    def generateRotationBin(self,rot, binSize=16):
+        bins = np.zeros(binSize)
+        # determining the rotation cutoff:
+        binVal = math.radians(
+            180) / binSize  # It doesn't matter if we rotate more than 180 degrees for the objects we are using
+
+        bin = int((rot + math.radians(90)) / binVal) - 1
+        if bin >= binSize:
+            bin = bin % (binSize - 1)
+        bins[bin] = 1
+        return bins
+    # def generateRotationBin(self,rot,binSize = 8):
+    #     bins = np.zeros(binSize*2)
+    #     #The idea here is utilizing the cos and sin components seperately
+    #     cosVal = math.cos(2*rot)#doubling the value so we hopefully avoid 0 values
+    #     sinVal = math.cos(2*rot)
+    #     #then, bin each between 0 and 1
+    #     binVal = 2/binSize
+    #     cosBin = int((cosVal + 1)/binVal)
+    #     sinBin = int((sinVal + 1)/binVal)
+    #     bins[cosBin] = 1
+    #     bins[sinBin+8] = 1
+    #     return bins
+
+    def pixelToCoord(self,img,sensor_size=(32,32)):
+        #need to mirror image
+        # img = ImageOps.mirror(img)
+        img = img.rotate(math.degrees(self.agent_ee_tip.get_orientation()[2]))
+        # img = ImageOps.flip(img)
+        pixel = np.array(img)
+        tR = self.top_right_dum.get_position(relative_to=self.agent_ee_tip)
+        bL = self.bot_left_dum.get_position(relative_to=self.agent_ee_tip)
+        pLoc = np.unravel_index(pixel.argmax(), pixel.shape)
 
 
+        x = bL[0] - tR[0]
+        y = bL[1] - tR[1]
+
+        x = pLoc[0] /sensor_size * x
+        y = pLoc[1]/sensor_size * y
+
+        return x,y
+    def pixelToCrop(self,img):
+
+        # img = img.rotate(-math.degrees(self.agent_ee_tip.get_orientation()[2]))
+        pixel = np.array(img)
+        pLoc = np.unravel_index(pixel.argmax(), pixel.shape)
+
+        return pLoc
     def replaceCube(self,onlyOr=False):
         pos = list(np.random.uniform(self.position_min, self.position_max))
         rot = list(np.random.uniform(self.orient_min,self.orient_max))
-        if not onlyOr:
-            self.cube.set_position(pos)
-        # self.cube.set_orientation(rot) #is table really the correct thing to base the orientation off of?
+        self.cube.set_position(pos)
+        if ROTATIONS:
+            self.cube.set_orientation(rot) #is table really the correct thing to base the orientation off of?
         try:
             pp = self.agent.get_linear_path(
                 position=self.cube.get_position(),
@@ -204,25 +270,36 @@ class Environment(object):
         self.path_step = self.path._path_points
     def gatherInfo(self,ep):
         im = self.vs.capture_rgb()
-        if not os.path.isdir(f"action_image/action_images_in"):
-            os.mkdir(f"action_image/action_images_in")
-        location_in = f"action_image/action_images_in/episode{ep}.png"
+        if not os.path.isdir(f"action_image_rotation/action_images_in"):
+            os.mkdir(f"action_image_rotation/action_images_in")
+        location_in = f"action_image_rotation/action_images_in/episode{ep}.png"
         im = Image.fromarray((im * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
         im.save(location_in)
 
         #now, we need to generate the x/y coordinates - this is based on the cube's location within the given image.
         cube_pos = ",".join(self.cube.get_position(relative_to=self.agent).astype(str))
         cube_rot = ",".join(self.cube.get_orientation(relative_to=self.agent).astype(str))
-        act_img = self.generateActionImage(self.cube,(64,64),GRAD)
+        bin_rot = self.generateRotationBin(self.cube.get_orientation(relative_to=self.agent_ee_tip)[2],binSize=BINSIZE)
+        bin_rot = ",".join(bin_rot.astype(str))
+        act_img, cropLoc = self.generateActionImage(self.cube,(64,64),GRAD)
+        cropLoc = self.pixelToCrop(act_img)
+        print(cropLoc)
+        crop_img = self.generateCroppedImg(im,cropLoc)
 
-        if not os.path.isdir(f"action_image/action_images_out"):
-            os.mkdir(f"action_image/action_images_out")
+        if not os.path.isdir(f"action_image_rotation/action_images_out"):
+            os.mkdir(f"action_image_rotation/action_images_out")
 
-        location_out = f"action_image/action_images_out/episode{ep}.png"
+        location_out = f"action_image_rotation/action_images_out/episode{ep}.png"
         act_img.save(location_out)
 
+        if not os.path.isdir(f"action_image_rotation/action_images_cropped"):
+            os.mkdir(f"action_image_rotation/action_images_cropped")
 
-        line = [location_in, location_out, cube_pos,cube_rot]
+        location_crop = f"action_image_rotation/action_images_cropped/episode{ep}.png"
+        crop_img.save(location_crop)
+
+
+        line = [location_in, location_out,location_crop,bin_rot, cube_pos,cube_rot]
         df_length = len(self.df)
         self.df.loc[df_length] = line
 
@@ -269,7 +346,7 @@ env.shutdown()
 
 
 
-env.df.to_csv("sequences/action_image.csv")
+env.df.to_csv("sequences/action_image_rotation.csv")
 
 
 

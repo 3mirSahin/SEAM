@@ -20,23 +20,23 @@ import torch
 from torchvision import transforms
 
 
-from model_outlines.action_models import UNet, EqUNet, EqUNetFloor
+from model_outlines.action_models import UNet, EqUNet, EqUNetFloor, rotCNN, rotEqCNN
 
 '''Configurations for the test instance.'''
 RUNS = 50 #the total number of test attempts done. Changes the cube location.
-TURN_EE = False
-if TURN_EE:
+TURN = True
+if TURN:
     SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_action_image_turned.ttt')
 else:
     SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_action_image.ttt')
-TEST_ORIENT = False
+TEST_ORIENT = True
 TEST_90 = False
 EQ = True
 Floor = False
 Padding = False
 RECT = True
-
 # FlipObject = True
+BINSIZE = 16
 
 
 '''Model Hyperparameters'''
@@ -58,15 +58,21 @@ transform = transforms.Compose(
 '''Model Choice'''
 if EQ and Floor:
     model = EqUNetFloor(3,1,N=4,flip=True)
+    rotModel = rotEqCNN(3,int(BINSIZE/2),int(BINSIZE/2))
 elif EQ:
     model = EqUNet(3,1,N=4,flip=True)
+    rotModel = rotCNN(3,int(BINSIZE/2),int(BINSIZE/2))
 else:
     model = UNet(3,1,bilinear=True)
-
+    rotModel = rotCNN(3,int(BINSIZE/2),int(BINSIZE/2))
 # model = UNet(3,1,bilinear=True)
 model.train()
+rotModel.train()
 model.load_state_dict(torch.load("../trained_models/actionEq90Try.pt")) #change this based on model
+rotModel.load_state_dict(torch.load("../trained_models/rotation_models/actionEq90Try.pt"))
 model.eval()
+rotModel.eval()
+#[3.1394 0.0221 1.5708]
 
 orient_min, orient_max = [0,0,math.radians(-90)], [0,0,math.radians(90)]
 
@@ -121,6 +127,7 @@ def resetEnv():
     pr.set_configuration_tree(agent_state)
 
     agent.set_joint_positions(initial_joint_position,disable_dynamics=True)
+
 def replaceCube():
     pos = list(np.random.uniform(position_min, position_max))
     # print(pos)
@@ -139,24 +146,57 @@ def replaceCube():
     except ConfigurationPathError as e:
         print("Cube bad placement. Replacing.")
         replaceCube()
-def get_path(object):
-    ori = cube.get_orientation()
+def get_path(object,rot=None,binSize = 16):
+    if rot is None:
+        ori = cube.get_orientation()[2]
+    else:
+        cubeOri = cube.get_orientation(relative_to=agent_ee_tip)[2]
+        # print(math.degrees(cubeOri))
+        cubeOri = np.argmax(generateRotationBin(cubeOri))
+
+        ori = getRotation(rot,binSize)
+
     try:
         path = agent.get_linear_path(
-            position=object.get_position(), euler=[0, math.radians(180), math.radians(90)-ori[2]])
-        return path, False
+            position=object.get_position(), euler=[0, math.radians(180), math.radians(90)+agent_ee_tip.get_orientation()[2]-ori])
+        return path, False, (np.argmax(rot) in range(cubeOri-1,cubeOri+2))
     except ConfigurationPathError as e:
         path = agent.get_path(
             position=cube.get_position(),
             euler=[0, math.radians(180), 0]
         )
     # print(path._path_points)
-    return path, True
+    return path, True, False
+
+
+def generateRotationBin(rot, binSize=16):
+    bins = np.zeros(binSize)
+    # determining the rotation cutoff:
+    binVal = math.radians(
+        180) / binSize  # It doesn't matter if we rotate more than 180 degrees for the objects we are using
+
+    bin = int((rot + math.radians(90)) / binVal) -1
+    if bin >= binSize:
+        bin = bin % (binSize-1)
+    bins[bin] = 1
+    return bins
+
+# def getRotationFromBin(rot,binSize = 8):
+#     bins = np.zeros(binSize*2)
+#     #The idea here is utilizing the cos and sin components seperately
+#     cosVal = math.cos(2*rot)#doubling the value so we hopefully avoid 0 values
+#     sinVal = math.cos(2*rot)
+#     #then, bin each between 0 and 1
+#     binVal = 2/binSize
+#     cosBin = int((cosVal + 1)/binVal)
+#     sinBin = int((sinVal + 1)/binVal)
+#     bins[cosBin] = 1
+#     bins[sinBin+8] = 1
+#     return bins
 
 def pixelToCoord(img,sensor_size=(32,32)):
     #need to mirror image
-    rot = math.degrees(agent_ee_tip.get_orientation()[2])
-    img = img.rotate(rot)
+    img = ImageOps.mirror(img)
     # img = ImageOps.flip(img)
     # print(img.size)
     pixel = np.array(img)
@@ -171,7 +211,7 @@ def pixelToCoord(img,sensor_size=(32,32)):
     x = (pLoc[0] /sensor_size[0] * x) + tR[0]
     y = (pLoc[1]/sensor_size[1] * y) + tR[1]
 
-    return x,y
+    return x,y, pLoc
 def generateTarget(x,y,z=cube.get_position(relative_to=agent_ee_tip)[2]-.025):
     target = Dummy.create()
     target.set_position([x,y,z],relative_to=agent_ee_tip)
@@ -196,12 +236,37 @@ def removePad(img,padSize):
     return img
 
 
+def generateCroppedImg(img, coord):
+    # img = ImageOps.flip(img)
+    img = ImageOps.mirror(img)
+    # add padding
+    pix = img.load()
+    img = ImageOps.expand(img, border=10, fill=pix[63, 63])
+
+    # return cropped version
+    cropLoc = (coord[1], coord[0], coord[1] + 20, coord[0] + 20)
+    print(cropLoc)
+    ret = img.crop(cropLoc)
+    ret = ImageOps.mirror(ret)
+    # ret = ImageOps.flip(ret)
+    return ret
+
+def getRotation(bin,binSize = 16):
+    #determining the rotation cutoff:
+    binVal = math.radians(180)/binSize #It doesn't matter if we rotate more than 180 degrees for the objects we are using
+    maxBin = np.argmax(bin)
+    maxBin -= int(binSize/2)
+    out = binVal * (maxBin) + math.radians(-75)
+    return out
+
+
 if not os.path.isdir(f"../Resulting Images/Verticle Horizontal"):
     os.mkdir(f"../Resulting Images/Verticle Horizontal")
 files = glob.glob('../Resulting Images/Verticle Horizontal/*')
 for f in files:
     os.remove(f)
 correct = 0
+correctBin = 0
 for tryy in range(RUNS):
     resetEnv()
     replaceCube()
@@ -213,6 +278,13 @@ for tryy in range(RUNS):
     stops = []
     img = vs.capture_rgb()
     img = Image.fromarray((img * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
+    #rotate the image according to the rotation of the end-effector
+    # print("Rotation: ",agent_ee_tip.get_orientation())
+    rot = math.ceil(math.degrees(agent_ee_tip.get_orientation()[2])) - 90
+    if TURN:
+        img = ImageOps.flip(img)
+    # print(rot)
+    img = img.rotate(0)
     imq = img.copy()
     # plt.imshow(img)
     # plt.show()
@@ -231,11 +303,20 @@ for tryy in range(RUNS):
         res = removePad(res,4)
     # plt.imshow(res)
     # plt.show()
-    x,y = pixelToCoord(res,(64,64))
+    x,y,pLoc = pixelToCoord(res,(64,64))
     print(x,y)
-    # print(x-cube.get_position(relative_to=agent_ee_tip)[0],y-cube.get_position(relative_to=agent_ee_tip)[1])
+    #now getting the rotation from the rotationalModel
     go = generateTarget(x,y)
-    path, direct_to_cube = get_path(go)
+    cropped = generateCroppedImg(imq,pLoc)
+    cropped = transform(cropped)
+    cropped = cropped.unsqueeze(0)
+    rot = rotModel(cropped).detach().numpy()
+
+
+    #get the path
+    path, direct_to_cube, binMatch = get_path(go,rot=rot,binSize=BINSIZE)
+    if direct_to_cube:
+        continue
     while not done:
         if path:
             done = path.step()
@@ -249,6 +330,8 @@ for tryy in range(RUNS):
     #We can check if the tip is within the the cube.
     if checkEEBoundary(agent_ee_tip,cube) and done and not direct_to_cube:
         correct+=1
+        if binMatch:
+            correctBin+=1
         if count % 10 == 0:
             imq.save(f'../Resulting Images/Verticle Horizontal/true_img{tryy}.png')
             # plt.imsave(f'../Resulting Images/Verticle Horizontal, .0005, 30 ep, Eq AI, ActionEQ90, .0001 lr, L1 L2, 1 Epoch, Only Action Image, actionTry90/fail_img{tryy}.png',imq)
@@ -266,6 +349,8 @@ for tryy in range(RUNS):
 
 print("Total Correct: ", correct)
 print("Percentage: ", correct/RUNS*100)
+print("Total Correct Rotation: ", correctBin)
+print("Percentage: ", correctBin/RUNS*100)
 
 
 pr.stop()
