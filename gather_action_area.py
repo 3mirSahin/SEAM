@@ -27,19 +27,20 @@ from pyrep.objects.proximity_sensor import ProximitySensor
 
 #Setup
 SCENE_FILE = join(dirname(abspath(__file__)), "simulations/scene_panda_reach_action_image.ttt")
-EPISODE = 150 #number of total episodes to run
+EPISODE = 75 #number of total episodes to run
 
 EPISODE_LENGTH = 100 #number of total steps to reach the target
 GRAD = True #If you want the gradient output using L1 - the further away the end point is, the lower the pixel value.
-VerticalStop = False #Only trains on one vertical side
-HorizontalStop = False #only trains on one horizontal side
+VerticalStop = True #Only trains on one vertical side
+HorizontalStop = True #only trains on one horizontal side
 RECTANGLE = True
+DISTRACT = False
 
 
 
 class Environment(object):
 
-    def __init__(self,rect = False):
+    def __init__(self,rect = False, distract = False):
         #launch pyrep
         self.pr = PyRep()
         self.pr.launch(SCENE_FILE, headless = True)
@@ -72,6 +73,9 @@ class Environment(object):
                                  color=[1.0, 0.1, 0.1],
                                  static=True, respondable=False)
 
+        self.distract = DISTRACT
+
+
         #--Cube Spawn
 
 
@@ -94,6 +98,7 @@ class Environment(object):
         self.df = pd.DataFrame(columns=col_name)
         self.path = None
         self.path_step = None
+        self.dist_items = None
     def setup(self):
         # self.pr.stop()
         # self.pr.start()
@@ -110,6 +115,33 @@ class Environment(object):
         self.agent.set_joint_positions(self.initial_joint_positions,disable_dynamics=True)
         self.path=None
         self.path_step = None
+
+        #----Distractors
+        if self.distract: #we are going to add three items in random places to act as a distractor
+            if self.dist_items:
+                for shape in self.dist_items:
+                    shape.remove()
+            size_limits = [.01,.01,.01, .07,.07,.07] #first three is the min and the last 3 is the max
+            self.dist_sphere = Shape.create(type=PrimitiveShape.SPHERE,
+                                            size = list(np.random.uniform(size_limits[:3], size_limits[3:])),
+                                            color = [.3,.5,.7],
+                                            static = True,
+                                            respondable = False)
+            self.dist_cone = Shape.create(type=PrimitiveShape.CONE,
+                                            size=list(np.random.uniform(size_limits[:3], size_limits[3:])),
+                                            color=[.7, .3, .5],
+                                            static=True,
+                                            respondable=False)
+            self.dist_cylinder = Shape.create(type=PrimitiveShape.CYLINDER,
+                                            size=list(np.random.uniform(size_limits[:3], size_limits[3:])),
+                                            color=[.3, .8, .2],
+                                            static=True,
+                                            respondable=False)
+            self.dist_items = [self.dist_sphere,self.dist_cone,self.dist_cylinder]
+            for shape in self.dist_items:
+                pos = list(np.random.uniform(self.position_min, self.position_max))
+                shape.set_position(pos)
+                shape.set_orientation(list(np.random.uniform(self.orient_min,self.orient_max)))
     def generateActionImage(self,item,sensor_size=(32,32),Grad = False):
         tR = self.top_right_dum.get_position(relative_to=self.agent_ee_tip) #lowest values, so need to subtract
         bL = self.bot_left_dum.get_position(relative_to=self.agent_ee_tip) #higher values, so need to add
@@ -165,8 +197,10 @@ class Environment(object):
                 if 0 <= (x+i) < sensor_size[1]:
                     pixels[y,x+i] = int(.80 * 255)
         #rotate based on ee rotation:
-        rot = math.degrees(self.agent_ee_tip.get_orientation()[2])
-        img = img.rotate(rot)
+        img = ImageOps.mirror(img)
+        rot = -int(math.degrees(self.vs.get_orientation()[2]))
+        print(rot)
+        # img = img.rotate(rot)
 
 
 
@@ -250,7 +284,7 @@ class Environment(object):
 
 
 
-env = Environment(rect=RECTANGLE)
+env = Environment(rect=RECTANGLE, distract = DISTRACT)
 for e in range(EPISODE):
     print(f"---EP {e}---")
     env.setup()

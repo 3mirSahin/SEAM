@@ -24,17 +24,20 @@ from model_outlines.action_models import UNet, EqUNet, EqUNetFloor, rotCNN, rotE
 
 '''Configurations for the test instance.'''
 RUNS = 50 #the total number of test attempts done. Changes the cube location.
-TURN = True
+TURN = False
+USEROT = False
 if TURN:
     SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_action_image_turned.ttt')
 else:
     SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_action_image.ttt')
-TEST_ORIENT = True
+TEST_ORIENT = False
 TEST_90 = False
 EQ = True
+C8 = False
 Floor = False
 Padding = False
 RECT = True
+DISTRACT = False
 # FlipObject = True
 BINSIZE = 16
 
@@ -59,12 +62,15 @@ transform = transforms.Compose(
 if EQ and Floor:
     model = EqUNetFloor(3,1,N=4,flip=True)
     rotModel = rotEqCNN(3,int(BINSIZE/2),int(BINSIZE/2))
+elif EQ and C8:
+    model = EqUNet(3,1,N=8,flip=False)
+    rotModel = rotEqCNN(3,int(BINSIZE/2),int(BINSIZE/2))
 elif EQ:
     model = EqUNet(3,1,N=4,flip=True)
-    rotModel = rotCNN(3,int(BINSIZE/2),int(BINSIZE/2))
+    rotModel = rotEqCNN(3,int(BINSIZE/2),int(BINSIZE/2))
 else:
     model = UNet(3,1,bilinear=True)
-    rotModel = rotCNN(3,int(BINSIZE/2),int(BINSIZE/2))
+    rotModel = rotEqCNN(3,int(BINSIZE/2),int(BINSIZE/2))
 # model = UNet(3,1,bilinear=True)
 model.train()
 rotModel.train()
@@ -107,6 +113,9 @@ bot_left_dum = Dummy("bot_left")
 top_right = top_right_dum.get_position()
 bot_left = bot_left_dum.get_position()
 
+dist_items = []
+
+
 
 '''Cube Movement'''
 
@@ -119,7 +128,7 @@ cube_min_max = [bot_left[0] - cube_size / 2,
 position_min, position_max = [cube_min_max[0], cube_min_max[2], cube_min_max[4]], [cube_min_max[1],
                                                                                            cube_min_max[3],
                                                                                            cube_min_max[4]]
-def resetEnv():
+def resetEnv(dist_items):
     agent.set_joint_target_velocities(np.zeros_like(agent.get_joint_target_velocities()))
     agent.set_motor_locked_at_zero_velocity(True)
 
@@ -128,6 +137,36 @@ def resetEnv():
 
     agent.set_joint_positions(initial_joint_position,disable_dynamics=True)
 
+        #Adding distractors
+    if DISTRACT:
+        if dist_items:
+            for shape in dist_items:
+                shape.remove()
+        size_limits = [.01, .01, .01, .07, .07, .07]  # first three is the min and the last 3 is the max
+        dist_sphere = Shape.create(type=PrimitiveShape.SPHERE,
+                                        size=list(np.random.uniform(size_limits[:3], size_limits[3:])),
+                                        color=[.3, .5, .7],
+                                        static=True,
+                                        respondable=False)
+        dist_cone = Shape.create(type=PrimitiveShape.CONE,
+                                      size=list(np.random.uniform(size_limits[:3], size_limits[3:])),
+                                      color=[.7, .3, .5],
+                                      static=True,
+                                      respondable=False)
+        dist_cylinder = Shape.create(type=PrimitiveShape.CYLINDER,
+                                          size=list(np.random.uniform(size_limits[:3], size_limits[3:])),
+                                          color=[.3, .8, .2],
+                                          static=True,
+                                          respondable=False)
+        dist_items = [dist_sphere, dist_cone, dist_cylinder]
+
+
+        for shape in dist_items:
+            pos = list(np.random.uniform(position_min, position_max))
+            shape.set_position(pos)
+            shape.set_orientation(list(np.random.uniform(orient_min, orient_max)))
+        return dist_items
+    return []
 def replaceCube():
     pos = list(np.random.uniform(position_min, position_max))
     # print(pos)
@@ -159,7 +198,10 @@ def get_path(object,rot=None,binSize = 16):
     try:
         path = agent.get_linear_path(
             position=object.get_position(), euler=[0, math.radians(180), math.radians(90)+agent_ee_tip.get_orientation()[2]-ori])
-        return path, False, (np.argmax(rot) in range(cubeOri-1,cubeOri+2))
+        if rot:
+            return path, False, (np.argmax(rot) in range(cubeOri-1,cubeOri+2))
+        else:
+            return path, False, True
     except ConfigurationPathError as e:
         path = agent.get_path(
             position=cube.get_position(),
@@ -268,7 +310,7 @@ for f in files:
 correct = 0
 correctBin = 0
 for tryy in range(RUNS):
-    resetEnv()
+    dist_items = resetEnv(dist_items)
     replaceCube()
 
     count = 0
@@ -314,7 +356,10 @@ for tryy in range(RUNS):
 
 
     #get the path
-    path, direct_to_cube, binMatch = get_path(go,rot=rot,binSize=BINSIZE)
+    if USEROT:
+        path, direct_to_cube, binMatch = get_path(go,rot=rot,binSize=BINSIZE)
+    else:
+        path, direct_to_cube, binMatch = get_path(go, rot=None, binSize=BINSIZE)
     if direct_to_cube:
         continue
     while not done:

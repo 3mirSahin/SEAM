@@ -260,7 +260,7 @@ class dihCNNLSTM(torch.nn.Module):
         self.pool1 = nn.PointwiseMaxPool(out_type, kernel_size=3, stride=2, padding=1)
 
         in_type = self.block1.out_type
-        out_type = nn.FieldType(self.r2_act, 128 * [self.r2_act.trivial_repr])
+        out_type = nn.FieldType(self.r2_act, 128 * [self.r2_act.regular_repr])
         self.block2 = nn.SequentialModule(
             nn.R2Conv(in_type, out_type, kernel_size=3, padding=1, bias=False),
             nn.InnerBatchNorm(out_type),

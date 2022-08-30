@@ -27,8 +27,8 @@ from pyrep.objects.proximity_sensor import ProximitySensor
 
 #Setup
 SCENE_FILE = join(dirname(abspath(__file__)), "simulations/scene_panda_reach_target.ttt")
-EPISODE = 200 #number of total episodes to run
-RUNS = 4 #number of total different approaches to take
+EPISODE = 75 #number of total episodes to run
+RUNS = 3 #number of total different approaches to take
 EPISODE_LENGTH = 100 #number of total steps to reach the target
 
 
@@ -67,7 +67,7 @@ class Environment(object):
         self.table = Shape('diningTable_visible')
         cube_min_max = self.table.get_bounding_box()
         cube_min_max = [cube_min_max[0] + cube_size,
-                        .6 - cube_size,
+                        cube_min_max[1] - cube_size,
                         cube_min_max[2] + cube_size,
                         cube_min_max[3] - cube_size,
                         cube_min_max[5] - .05]
@@ -243,7 +243,7 @@ env.shutdown()
 
 
 
-env.df.to_csv("normal.csv")
+env.df.to_csv("sequences/normal.csv")
 
 
 

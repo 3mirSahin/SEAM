@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import PIL.Image as Image
 from model_outlines.deep_models import CNNLSTM
+import matplotlib.pyplot as plt
 
 #IMPORTANT GENERAL STUFF
 EPOCHS = 20
@@ -45,7 +46,7 @@ class SimDataset(Dataset):
 
 
     def __getitem__(self, index):
-        filename = self.df["imLoc"][index]
+        filename = "../" + self.df["imLoc"][index]
         if not self.eeVel:
             jointVel = [float(item) for item in self.df['jVel'][index].split(",")]
             main = jointVel
@@ -96,13 +97,15 @@ dtype = torch.float32
 def lossWStop(out,true):
     mL = F.mse_loss(out[:,:-1],true[:,:-1])
     bL = F.binary_cross_entropy(out[:,-1],true[:,-1])
-    return mL+.5*bL
+    return mL+.4*bL
 
 
 def train_model(model,optimizer,epochs=1):
     model = model.to(device=device)
     mseLoss = nn.MSELoss()
+    hist = []
     for e in range(epochs):
+        eHist = []
         for t, (x, jv) in enumerate(trainLoader):
         # for t, (x,jv, ep, cp) in enumerate(trainLoader):
             model.train()
@@ -125,10 +128,15 @@ def train_model(model,optimizer,epochs=1):
             loss.backward()
 
             optimizer.step()
-
+            eHist.append(loss.item())
             if t % print_every == 0:
                 print('Epoch: %d, Iteration %d, loss = %.4f' % (e, t, loss.item()))
-
+        if EPOCHS >= 5:
+            mHist = np.mean(eHist)
+            hist.append(mHist)
+        else:
+            hist.extend(eHist)
+    return hist
 torch.cuda.empty_cache()
 if EEVEL:
     numparam = 12
@@ -140,11 +148,16 @@ optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WD)
 params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 print("Total number of parameters is: {}".format(params))
 
-train_model(model, optimizer, epochs = EPOCHS)
+hist = train_model(model, optimizer, epochs = EPOCHS)
 
 # save the model
-torch.save(model.state_dict(), 'trained_models/sideOrLSTM.pt')
+torch.save(model.state_dict(), '../trained_models/normalCNNLSTM.pt')
 
+plt.plot(hist)
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.title("Training Loss")
+plt.show()
 
 
 

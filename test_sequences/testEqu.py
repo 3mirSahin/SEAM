@@ -16,14 +16,14 @@ from PIL import Image
 import torch
 from torchvision import transforms
 
-from model_outlines.equivariant_models import dihCNNLSTM
+from model_outlines.equivariant_models import dihCNNLSTM, equCNNLSTM
 
 '''Configurations for the test instance.'''
 RUNS = 30 #the total number of test attempts done. Changes the cube location.
 STOP = True
 EEVEL = True
 SCENE_FILE = join(dirname(abspath(__file__)), '../simulations/scene_panda_reach_target.ttt')
-TEST_ORIENT = False
+TEST_ORIENT = True
 useLSTM = True
 '''Model Hyperparameters'''
 device = torch.device('cpu')
@@ -49,7 +49,7 @@ else:
 
 model = dihCNNLSTM(stop=STOP,num_outputs=numparam)
 model.train()
-model.load_state_dict(torch.load("trained_models/dihLSTM.pt"))
+model.load_state_dict(torch.load("../trained_models/normalDihCNNLSTM.pt"))
 model.eval()
 
 orient_min, orient_max = [0,0,math.radians(-45)], [0,0,math.radians(45)]

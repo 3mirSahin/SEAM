@@ -9,6 +9,7 @@ from pyrep.objects.vision_sensor import VisionSensor
 from pyrep.objects.proximity_sensor import ProximitySensor
 from pyrep.backend import sim
 
+import pandas as pd
 import numpy as np
 import math
 from PIL import Image
@@ -43,7 +44,7 @@ if EEVEL:
 else:
     numparam = 13
 model = CNNLSTM(stop=STOP,num_outputs=numparam)
-model.load_state_dict(torch.load("trained_models/stopOrCNNLSTM.pt"))
+model.load_state_dict(torch.load("../trained_models/normalCNNLSTM.pt"))
 model.eval()
 model.start_newSeq()
 
@@ -155,7 +156,7 @@ for _ in range(RUNS):
 
     stops = []
 
-    # read = pd.read_csv("lol.csv")
+    read = pd.read_csv("../sequences/normal.csv")
 
     while not done:
         #take the image from the robot

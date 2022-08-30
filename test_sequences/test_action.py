@@ -32,6 +32,7 @@ else:
 TEST_ORIENT = False
 TEST_90 = False
 EQ = True
+C8 = True
 Floor = False
 Padding = False
 RECT = True
@@ -58,6 +59,8 @@ transform = transforms.Compose(
 '''Model Choice'''
 if EQ and Floor:
     model = EqUNetFloor(3,1,N=4,flip=True)
+elif EQ and C8:
+    model = EqUNet(3,1,N=8,flip=False)
 elif EQ:
     model = EqUNet(3,1,N=4,flip=True)
 else:
@@ -121,6 +124,7 @@ def resetEnv():
     pr.set_configuration_tree(agent_state)
 
     agent.set_joint_positions(initial_joint_position,disable_dynamics=True)
+
 def replaceCube():
     pos = list(np.random.uniform(position_min, position_max))
     # print(pos)

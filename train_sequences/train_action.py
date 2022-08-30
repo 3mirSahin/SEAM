@@ -13,11 +13,11 @@ from model_outlines.action_models import UNet, EqUNet, EqUNetFloor
 #IMPORTANT GENERAL STUFF
 EPOCHS = 30 #orient 10
 BATCH_SIZE = 16
-LR = 0.0005 #.0001 for all trained_models except for normal simple equ
+LR = 0.001 #.0001 for all trained_models except for normal simple equ
 WD = 1e-7
 USE_GPU = True
 EQ = True
-C8 = True
+C8 = False
 Floor = False
 Padding = False
 
@@ -79,7 +79,7 @@ class SimDataset(Dataset):
 
 
 
-trainSet = SimDataset("../sequences/action_image_rotation.csv", transform,transformOut)
+trainSet = SimDataset("../sequences/action_image.csv", transform,transformOut)
 
 # print(len(trainSet[0][1])+len(trainSet[0][2])+len(trainSet[0][3]))
 #May want to create a trainining and validation set for later
