@@ -27,8 +27,8 @@ from pyrep.objects.proximity_sensor import ProximitySensor
 
 #Setup
 SCENE_FILE = join(dirname(abspath(__file__)), "simulations/scene_panda_reach_target.ttt")
-EPISODE = 75 #number of total episodes to run
-RUNS = 3 #number of total different approaches to take
+EPISODE = 200 #number of total episodes to run
+RUNS = 4 #number of total different approaches to take
 EPISODE_LENGTH = 100 #number of total steps to reach the target
 
 
@@ -67,7 +67,7 @@ class Environment(object):
         self.table = Shape('diningTable_visible')
         cube_min_max = self.table.get_bounding_box()
         cube_min_max = [cube_min_max[0] + cube_size,
-                        cube_min_max[1] - cube_size,
+                        .6 - cube_size,
                         cube_min_max[2] + cube_size,
                         cube_min_max[3] - cube_size,
                         cube_min_max[5] - .05]
@@ -116,7 +116,7 @@ class Environment(object):
         rot = list(np.random.uniform(self.orient_min,self.orient_max))
         if not onlyOr:
             self.cube.set_position(pos, self.table)
-        # self.cube.set_orientation(rot) #is table really the correct thing to base the orientation off of?
+        self.cube.set_orientation(rot) #is table really the correct thing to base the orientation off of?
         try:
             pp = self.agent.get_linear_path(
                 position=self.cube.get_position(),
@@ -131,7 +131,7 @@ class Environment(object):
         targpos = list(np.random.uniform(self.target_min, self.target_max))
 
         self.target.set_position(targpos, self.cube)
-        # self.target.set_orientation([0,0,0],self.cube) #giving the same orientation to the target as well.
+        self.target.set_orientation([0,0,0],self.cube) #giving the same orientation to the target as well.
         try:
             self.path = self.agent.get_linear_path(
                 position=self.target.get_position(),
@@ -143,11 +143,11 @@ class Environment(object):
             self.replaceTarget()
     def gatherInfo(self,ep,r,s,stop=False):
         im = self.vs.capture_rgb()
-        if not os.path.isdir(f"images/episode{ep}"):
-            os.mkdir(f"images/episode{ep}")
-        if not os.path.isdir(f"images/episode{ep}/run{r}"):
-            os.mkdir(f"images/episode{ep}/run{r}")
-        location = f"images/episode{ep}/run{r}/s{s}.jpg"
+        if not os.path.isdir(f"orImages/episode{ep}"):
+            os.mkdir(f"orImages/episode{ep}")
+        if not os.path.isdir(f"orImages/episode{ep}/run{r}"):
+            os.mkdir(f"orImages/episode{ep}/run{r}")
+        location = f"orImages/episode{ep}/run{r}/s{s}.jpg"
         im = Image.fromarray((im * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
         im.save(location)
         jacob = self.agent.get_jacobian()
@@ -243,7 +243,7 @@ env.shutdown()
 
 
 
-env.df.to_csv("sequences/normal.csv")
+env.df.to_csv("orient.csv")
 
 
 
