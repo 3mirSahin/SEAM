@@ -16,6 +16,7 @@ This allows the representation to transform like the input image, meaning the in
 
 The final model proposed in the paper uses an FCN network to generate the final EAMs. The output maps need to be
 passed through an interpretation layer with the workspace positions. This EAM architecture is found below:
+
 ![EAM Diagram](git_images/FullEAMDiag.drawio.png)
 
 ## Requirements
@@ -38,10 +39,14 @@ These provide options to adjust the training parameters, testing environment and
 
 ##Extra Information
 Below are the two suggested EAM inputs for training. This can be switched using the gradient option in the gather_data file.
+
 ![EAM Inputs](git_images/EAM Types.drawio-2.png)
 
 Finally, you can find some generated results of EAM models trained without rotating rectangles tested without rotation, with 90 degree rotation, and with random rotations.
 The images presented are in that order.
+
 ![EAM Vert](git_images/Vert Examples.drawio.png)
+
 ![EAM 90](git_images/90 Examples.drawio.png)
+
 ![EAM Rand](git_images/Turn Examples.drawio.png)
