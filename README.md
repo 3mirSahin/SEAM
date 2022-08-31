@@ -66,10 +66,12 @@ The images presented are in that order.
 <p>
     <img src="git_images/Vert Examples.drawio.png" width=50% height=50% />
 </p>
+
 **EAMs generated for 90-degree rotated rectagles**
 <p>
     <img src="git_images/90 Examples.drawio.png" width=50% height=50% />
 </p>
+
 **EAMs generated for randomly rotated rectagles**
 <p>
     <img src="git_images/Turn Examples.drawio.png" width=50% height=50% />
