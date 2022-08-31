@@ -25,6 +25,14 @@ passed through an interpretation layer with the workspace positions. This EAM ar
     <img src="git_images/FullEAMDiag.drawio.png" width=75% height=75% />
 </p>
 
+Within the code about "rotated" EAMs, you can find an updated implementation of EAMs where a new rotational network is used
+to determine the rotation of the end-effector in order to grasp a given object. It uses the positional argument from an EAM to 
+crop a part of the input and generate a rotation vector. However, this is not the a part of the proposed work in the thesis.
+
+<p>
+    <img src="git_images/Rot Fig.drawio.png" width=75% height=75% />
+</p>
+
 
 ## Requirements
 This project was built on [PyRep](https://github.com/stepjam/PyRep) and [Coppelia Sim](https://www.coppeliarobotics.com). 
@@ -53,14 +61,16 @@ Below are the two suggested EAM inputs for training. This can be switched using 
 
 Finally, you can find some generated results of EAM models trained without rotating rectangles tested without rotation, with 90 degree rotation, and with random rotations.
 The images presented are in that order.
+
+**EAMs generated for non-rotated rectagles**
 <p>
     <img src="git_images/Vert Examples.drawio.png" width=50% height=50% />
 </p>
-
+**EAMs generated for 90-degree rotated rectagles**
 <p>
     <img src="git_images/90 Examples.drawio.png" width=50% height=50% />
 </p>
-
+**EAMs generated for randomly rotated rectagles**
 <p>
     <img src="git_images/Turn Examples.drawio.png" width=50% height=50% />
 </p>
