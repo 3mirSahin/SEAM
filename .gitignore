@@ -1,4 +1,4 @@
-images/
+git_images/
 *.csv
 *.pt
 trained_models/

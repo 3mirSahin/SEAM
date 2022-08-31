@@ -7,16 +7,16 @@ Spatially Equivariant Action Maps (EAM) is a novel action representation for Vis
 properties of SE(2) grasping space. Specifically, it maps final end-effector positions of a robot arm into a 2D
 numpy array and assigns each position a weight. The element with the max position indicates where the end-effector will move towards.
 
-![EAM Example](images/EAM.drawio-2.png)
+![EAM Example](git_images/EAM.drawio-2.png)
 
 The generated 2D matrix is the same size and the visual input and the pixel values are aligned with the workspace.
 This allows the representation to transform like the input image, meaning the input and the output are equivariant.
 
-![EAM Equivariant](images/EAM Eq.drawio.png)
+![EAM Equivariant](git_images/EAM Eq.drawio.png)
 
 The final model proposed in the paper uses an FCN network to generate the final EAMs. The output maps need to be
 passed through an interpretation layer with the workspace positions. This EAM architecture is found below:
-![EAM Diagram](images/FullEAMDiag.drawio.png)
+![EAM Diagram](git_images/FullEAMDiag.drawio.png)
 
 ## Requirements
 This project was built on [PyRep](https://github.com/stepjam/PyRep) and [Coppelia Sim](https://www.coppeliarobotics.com). 
@@ -38,10 +38,10 @@ These provide options to adjust the training parameters, testing environment and
 
 ##Extra Information
 Below are the two suggested EAM inputs for training. This can be switched using the gradient option in the gather_data file.
-![EAM Inputs](images/EAM Types.drawio-2.png)
+![EAM Inputs](git_images/EAM Types.drawio-2.png)
 
 Finally, you can find some generated results of EAM models trained without rotating rectangles tested without rotation, with 90 degree rotation, and with random rotations.
 The images presented are in that order.
-![EAM Vert](images/Vert Examples.drawio.png)
-![EAM 90](images/90 Examples.drawio.png)
-![EAM Rand](images/Turn Examples.drawio.png)
+![EAM Vert](git_images/Vert Examples.drawio.png)
+![EAM 90](git_images/90 Examples.drawio.png)
+![EAM Rand](git_images/Turn Examples.drawio.png)
