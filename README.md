@@ -1,8 +1,27 @@
 
-# Equivariant Action Maps
+# Spatially Equivariant Action Maps
 
 This is the repository for the Spatially Equivariant Action Maps MSc thesis project. Paper link will be added.
 
+## Requirements
+This project was built on [PyRep](https://github.com/stepjam/PyRep) and [Coppelia Sim](https://www.coppeliarobotics.com).
+Refer to the installation requirements of each.
+
+The code is written in Python and requires PIL, PyTorch, and [e2cnn](https://github.com/QUVA-Lab/e2cnn) libraries to work.
+
+## Structure and How to Run
+The files are structured in the following way:
+
+* **Model Outlines:** This folder holds files that have the PyTorch ML networks used in the project. *Action Models* refer to the models used to train EAMs while the rest refer to models used to train end-effector velocity prediction models.
+* **Simulations:** This folder holds the simulation environments that data_gathering and testing runs. Required by PyRep and CoppeliaSim.
+* **Test Sequeunces:** This folder holds the code for various testing modules built for the project. To test EAMs, use *"test_action_rotation"*.
+* **Train Sequences:** This folder holds the code for various training modules built for the project. To train EAMs, use *"train_action"* and to train the crop rotation model use*"train_action_rotation"*.
+* Gather data is spread across the main directory. For EAMs, use *"gather_action_area"* or *"gather_action_area_rotation"*.
+
+Within each Train, Test, and Gather Data modules, certain parameters are written in CAPITAL LETTERS after importing relevant libraries.
+These provide options to adjust the training parameters, testing environment and parameters, and data gathering parameters.
+
+# What are Spatially Equivariant Action Maps?
 Spatially Equivariant Action Maps (EAM) is a novel action representation for Visual Robot Learning that aims to leverage the equivariant
 properties of SE(2) grasping space. Specifically, it maps final end-effector positions of a robot arm into a 2D
 numpy array and assigns each position a weight. The element with the max position indicates where the end-effector will move towards.
@@ -25,6 +44,7 @@ passed through an interpretation layer with the workspace positions. This EAM ar
     <img src="git_images/FullEAMDiag.drawio.png" width=75% height=75% />
 </p>
 
+##Adding Rotation
 Within the code about "rotated" EAMs, you can find an updated implementation of EAMs where a new rotational network is used
 to determine the rotation of the end-effector in order to grasp a given object. It uses the positional argument from an EAM to 
 crop a part of the input and generate a rotation vector. However, this is not the a part of the proposed work in the thesis.
@@ -34,25 +54,8 @@ crop a part of the input and generate a rotation vector. However, this is not th
 </p>
 
 
-## Requirements
-This project was built on [PyRep](https://github.com/stepjam/PyRep) and [Coppelia Sim](https://www.coppeliarobotics.com). 
-Refer to the installation requirements of each.
 
-The code is written in Python and requires PIL, PyTorch, and [e2cnn](https://github.com/QUVA-Lab/e2cnn) libraries to work.
-
-## Structure and How to Run
-The files are structured in the following way:
-
-* **Model Outlines:** This folder holds files that have the PyTorch ML networks used in the project. *Action Models* refer to the models used to train EAMs while the rest refer to models used to train end-effector velocity prediction models.
-* **Simulations:** This folder holds the simulation environments that data_gathering and testing runs. Required by PyRep and CoppeliaSim.
-* **Test Sequeunces:** This folder holds the code for various testing modules built for the project. To test EAMs, use *"test_action_rotation"*.
-* **Train Sequences:** This folder holds the code for various training modules built for the project. To train EAMs, use *"train_action"* and to train the crop rotation model use*"train_action_rotation"*.
-* Gather data is spread across the main directory. For EAMs, use *"gather_action_area"* or *"gather_action_area_rotation"*.
-
-Within each Train, Test, and Gather Data modules, certain parameters are written in CAPITAL LETTERS after importing relevant libraries.
-These provide options to adjust the training parameters, testing environment and parameters, and data gathering parameters.
-
-##Extra Information
+##Inputs and Results
 Below are the two suggested EAM inputs for training. This can be switched using the gradient option in the gather_data file.
 
 <p>
