@@ -1,5 +1,5 @@
 
-# Spatially Equivariant Action Maps
+# SEAM: Spatially Equivariant Action Maps
 
 This is the repository for the Spatially Equivariant Action Maps MSc thesis project. Paper link will be added.
 
