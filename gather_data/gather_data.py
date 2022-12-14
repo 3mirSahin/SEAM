@@ -26,7 +26,7 @@ from pyrep.objects.proximity_sensor import ProximitySensor
 
 
 #Setup
-SCENE_FILE = join(dirname(abspath(__file__)), "simulations/scene_panda_reach_target.ttt")
+SCENE_FILE = join(dirname(abspath(__file__)), "../simulations/scene_panda_reach_target.ttt")
 EPISODE = 75 #number of total episodes to run
 RUNS = 3 #number of total different approaches to take
 EPISODE_LENGTH = 100 #number of total steps to reach the target
@@ -143,11 +143,11 @@ class Environment(object):
             self.replaceTarget()
     def gatherInfo(self,ep,r,s,stop=False):
         im = self.vs.capture_rgb()
-        if not os.path.isdir(f"images/episode{ep}"):
-            os.mkdir(f"images/episode{ep}")
-        if not os.path.isdir(f"images/episode{ep}/run{r}"):
-            os.mkdir(f"images/episode{ep}/run{r}")
-        location = f"images/episode{ep}/run{r}/s{s}.jpg"
+        if not os.path.isdir(f"../images/episode{ep}"):
+            os.mkdir(f"../images/episode{ep}")
+        if not os.path.isdir(f"../images/episode{ep}/run{r}"):
+            os.mkdir(f"../images/episode{ep}/run{r}")
+        location = f"../images/episode{ep}/run{r}/s{s}.jpg"
         im = Image.fromarray((im * 255).astype(np.uint8)).resize((64, 64)).convert('RGB')
         im.save(location)
         jacob = self.agent.get_jacobian()
@@ -243,7 +243,7 @@ env.shutdown()
 
 
 
-env.df.to_csv("sequences/normal.csv")
+env.df.to_csv("../sequences/normal.csv")
 
 
 
