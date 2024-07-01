@@ -44,7 +44,7 @@ passed through an interpretation layer with the workspace positions. This EAM ar
     <img src="git_images_documents/FullEAMDiag.drawio.png" width=75% height=75% />
 </p>
 
-##Adding Rotation
+## Adding Rotation
 Within the code about "rotated" EAMs, you can find an updated implementation of EAMs where a new rotational network is used
 to determine the rotation of the end-effector in order to grasp a given object. It uses the positional argument from an EAM to 
 crop a part of the input and generate a rotation vector. However, this is not the a part of the proposed work in the thesis.
@@ -55,7 +55,7 @@ crop a part of the input and generate a rotation vector. However, this is not th
 
 
 
-##Inputs and Results
+## Inputs and Results
 Below are the two suggested EAM inputs for training. This can be switched using the gradient option in the gather_data file.
 
 <p>
